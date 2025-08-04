@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "figma-translation-hybrid"
+version = "0.1.0"
+description = "Hybrid translation backend using KB and LLM with CrewAI orchestration"
+authors = ["Your Name <you@example.com>"]
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.111.0"
+uvicorn = "^0.29.0"
+crewai = "^0.20.0"
+langchain = "^0.2.0"
+openai = "^1.30.1"
+chromadb = "^0.4.24"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
