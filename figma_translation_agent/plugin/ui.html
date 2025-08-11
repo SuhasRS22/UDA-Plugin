@@ -1,81 +1,42 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>Translation Agent</title>
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      padding: 16px;
-      margin: 0;
-    }
-    button {
-      background: #18A0FB;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
-      cursor: pointer;
-      width: 100%;
-      margin: 4px 0;
-    }
-    button:hover {
-      background: #0C7CE6;
-    }
-    .button-group {
-      margin: 16px 0;
-    }
-    h3 {
-      margin: 16px 0 8px 0;
-      color: #333;
-    }
-    .status {
-      padding: 8px;
-      margin: 8px 0;
-      border-radius: 4px;
-      background: #f0f0f0;
-      font-size: 12px;
-    }
-  </style>
-</head>
-<body>
-  <h3>Content Filler Agent</h3>
-  <p>Select empty text layers and click a button to fill them with content:</p>
-  
-  <div class="button-group">
-    <button onclick="fillContent('paragraph')">Fill with Paragraph</button>
-    <button onclick="fillContent('name')">Fill with Names</button>
-    <button onclick="fillContent('email')">Fill with Emails</button>
-    <button onclick="fillContent('address')">Fill with Addresses</button>
-    <button onclick="fillContent('product')">Fill with Product Names</button>
-  </div>
-
-  <div id="status" class="status">Ready to fill content...</div>
-
-  <script>
-    function fillContent(contentType) {
-      document.getElementById('status').textContent = `Filling with ${contentType}...`;
-      parent.postMessage({ 
-        pluginMessage: { 
-          type: 'fill-content', 
-          contentType: contentType 
-        } 
-      }, '*');
-    }
-
-    // Listen for messages from the plugin
-    window.onmessage = (event) => {
-      const msg = event.data.pluginMessage;
-      const statusEl = document.getElementById('status');
-      
-      if (msg.type === 'content-filled') {
-        statusEl.textContent = `✅ ${msg.data.message}`;
-        statusEl.style.background = '#e8f5e8';
-      } else if (msg.type === 'error') {
-        statusEl.textContent = `❌ ${msg.message}`;
-        statusEl.style.background = '#fee';
+  <head>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 8px;
       }
-    };
-  </script>
-</body>
+      #output {
+        background: #f4f4f4;
+        padding: 8px;
+        height: 150px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Ask the AI</h3>
+    <input id="prompt" placeholder="Type your prompt here" style="width: 80%" />
+    <button id="run">Run</button>
+    <div id="output">Waiting for input...</div>
+
+    <script>
+      document.getElementById("run").onclick = () => {
+        const prompt = document.getElementById("prompt").value;
+        parent.postMessage(
+          { pluginMessage: { type: "run-prompt", prompt } },
+          "*"
+        );
+      };
+
+      window.onmessage = (event) => {
+        const msg = event.data.pluginMessage;
+        if (msg.type === "llm-response") {
+          document.getElementById("output").innerText = msg.text;
+        }
+      };
+    </script>
+  </body>
 </html>

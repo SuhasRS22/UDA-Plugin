@@ -12,9 +12,7 @@ export async function runResizeAgent(
   console.log(`[ResizeAgent] Processing ${selection.length} selected items`);
 
   async function processNode(node: SceneNode) {
-    console.log(
-      `[ResizeAgent] Checking node: ${node.type}, name: ${node.name}`
-    );
+    console.log(`[ResizeAgent] Checking node: ${node.type}, name: ${node.name}`);
 
     if ("resize" in node && !node.locked) {
       try {
