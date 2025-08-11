@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 8px;
+      }
+      #output {
+        background: #f4f4f4;
+        padding: 8px;
+        height: 150px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Ask the AI</h3>
+    <input id="prompt" placeholder="Type your prompt here" style="width: 80%" />
+    <button id="run">Run</button>
+    <div id="output">Waiting for input...</div>
+
+    <script>
+      document.getElementById("run").onclick = () => {
+        const prompt = document.getElementById("prompt").value;
+        parent.postMessage(
+          { pluginMessage: { type: "run-prompt", prompt } },
+          "*"
+        );
+      };
+
+      window.onmessage = (event) => {
+        const msg = event.data.pluginMessage;
+        if (msg.type === "llm-response") {
+          document.getElementById("output").innerText = msg.text;
+        }
+      };
+    </script>
+  </body>
+</html>
