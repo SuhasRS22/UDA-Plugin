@@ -4,7 +4,8 @@
   "description": "This project provides an AI-powered translation agent for Figma plugins, supporting multi-language translation and knowledge base integration.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "esbuild figma_translation_agent/plugin/code.ts --bundle --outfile=figma_translation_agent/plugin/code.js --format=iife --target=es2017"
   },
   "repository": {
     "type": "git",
@@ -20,6 +21,11 @@
   "homepage": "https://github.com/SuhasRS22/Figma-translation-agent#readme",
   "devDependencies": {
     "@figma/plugin-typings": "^1.116.0",
-    "@types/node": "^24.2.1"
+    "@types/node": "^24.2.1",
+    "esbuild": "^0.25.8"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.68",
+    "@langchain/openai": "^0.6.7"
   }
 }
