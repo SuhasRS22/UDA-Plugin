@@ -1,7 +1,13 @@
 {
-  "name": "AI Plugin",
-  "id": "ai-plugin",
+  "name": "Figma Translation Agent",
+  "id": "figma-translation-agent",
   "api": "1.0.0",
-  "main": "code.js",
-  "ui": "ui.html"
+  "main": "code.ts",
+  "ui": "ui.html",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["localhost:8000", "127.0.0.1:8000"]
+  }
 }
