@@ -32,3 +32,27 @@ coverage/
 *.bak
 *.tmp
 .cache/
+
+# Node.js (for plugin/frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# TypeScript/JavaScript build outputs
+*.js.map
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Dependencies and packages
+.pnp.*
+.yarn/
+
+# Runtime and temp files
+.cache/
+.temp/
+.tmp/
