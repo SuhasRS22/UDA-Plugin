@@ -55,24 +55,19 @@ figma_translation_agent/
    python app/main.py
    ```
 
-### Frontend/Plugin Setup
+### Plugin Development
 
-1. Navigate to the plugin or frontend directory:
-   ```
-   cd figma_translation_agent/plugin
-   # or
-   cd figma_translation_agent/frontend
-   ```
-2. Install Node.js dependencies:
-   ```
-   npm install
-   ```
-3. Build and run as needed:
-   ```
-   npm run build
-   # or
-   npm start
-   ```
+- Edit `plugin/code.ts` for plugin logic
+- Edit `plugin/manifest.json` for plugin configuration
+- No build step required for basic TypeScript plugins (Figma handles compilation)
+
+### To load the plugin in Figma:
+
+```
+   - Open Figma Desktop
+   - Go to Plugins → Development → Import plugin from manifest
+   - Select the `manifest.json` file from the plugin directory
+```
 
 ### Translation Files
 

@@ -1,1 +1,7 @@
-# manifest.json
+{
+  "name": "AI Plugin",
+  "id": "ai-plugin",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html"
+}
