@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/SuhasRS22/Figma-translation-agent#readme",
   "devDependencies": {
-    "@figma/plugin-typings": "^1.116.0"
+    "@figma/plugin-typings": "^1.116.0",
+    "@types/node": "^24.2.1"
   }
 }
