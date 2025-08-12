@@ -2,7 +2,7 @@
 
 import { agentOrchestrator } from "../plugin/orchestrator/agentOrchestrator";
 
-figma.showUI(__html__, { width: 400, height: 300 });
+figma.showUI(__html__, { width: 400, height: 600 });
 
 // Helper function to recursively get all nodes inside a frame
 function getAllNodesInFrame(node: SceneNode): SceneNode[] {
@@ -61,6 +61,11 @@ figma.ui.onmessage = async (msg) => {
     const selection = figma.currentPage.selection;
     if (selection.length === 0) {
       figma.notify("⚠️ Please select at least one node");
+      // Send message back to UI to reset button
+      figma.ui.postMessage({
+        type: "selection-error",
+        message: "Please select at least one node",
+      });
       return;
     }
 

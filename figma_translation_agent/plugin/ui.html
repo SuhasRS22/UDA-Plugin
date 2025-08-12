@@ -344,6 +344,7 @@
 
         if (!prompt) {
           addLogItem("Please enter a prompt", "error");
+          resetButton();
           return;
         }
 
@@ -389,6 +390,9 @@
         } else if (msg.type === "error") {
           addLogItem(`Error: ${msg.message}`, "error");
           resetButton();
+        } else if (msg.type === "selection-error") {
+          addLogItem(msg.message, "error");
+          resetButton("Select nodes & try again");
         }
       };
 
@@ -403,9 +407,9 @@
         logList.scrollTop = logList.scrollHeight;
       }
 
-      function resetButton() {
+      function resetButton(text = "Generate") {
         generateBtn.disabled = false;
-        generateBtn.textContent = "Generate";
+        generateBtn.textContent = text;
       }
 
       // Enable Enter key to submit
