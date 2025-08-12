@@ -28,10 +28,13 @@
   };
 
   // shared/llmClient.ts
+  function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
   function llmClient(userPrompt) {
     return __async(this, null, function* () {
       var _a, _b;
-      console.log("[LLM] Sending prompt to OpenAI:", userPrompt);
+      console.log("[LLM] Sending prompt to Groq:", userPrompt);
       const systemPrompt = `
 You are a task planner for a Figma plugin.
 
@@ -47,49 +50,78 @@ Each task should look like:
 Example response:
 [{"agent": "resize", "params": {"width": 100, "height": 100}}]
   `;
-      try {
-        const response = yield fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${OPENAI_API_KEY}`
-          },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt }
-            ],
-            temperature: 0
-          })
-        });
-        if (!response.ok) {
-          throw new Error(`OpenAI API error: ${response.status}`);
-        }
-        const data = yield response.json();
-        let text = (_b = (_a = data.choices[0].message) == null ? void 0 : _a.content) == null ? void 0 : _b.trim();
-        console.log("[LLM] Raw response:", text);
-        if (text && text.includes("```")) {
-          text = text.replace(/```json\s*/g, "").replace(/```\s*/g, "");
-          console.log("[LLM] Cleaned response:", text);
-        }
+      const maxRetries = 3;
+      let attempt = 0;
+      while (attempt < maxRetries) {
         try {
-          return JSON.parse(text || "[]");
+          const response = yield fetch(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${GROQ_API_KEY}`
+              },
+              body: JSON.stringify({
+                model: "llama-3.1-8b-instant",
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: userPrompt }
+                ],
+                temperature: 0
+              })
+            }
+          );
+          if (!response.ok) {
+            if (response.status === 429) {
+              const retryAfter = response.headers.get("retry-after");
+              const delayMs = retryAfter ? parseInt(retryAfter) * 1e3 : Math.pow(2, attempt) * 1e3;
+              console.log(
+                `[LLM] Rate limited (429). Retrying in ${delayMs}ms... (attempt ${attempt + 1}/${maxRetries})`
+              );
+              if (attempt < maxRetries - 1) {
+                yield delay(delayMs);
+                attempt++;
+                continue;
+              }
+            }
+            throw new Error(
+              `Groq API error: ${response.status} - ${yield response.text()}`
+            );
+          }
+          const data = yield response.json();
+          let text = (_b = (_a = data.choices[0].message) == null ? void 0 : _a.content) == null ? void 0 : _b.trim();
+          console.log("[LLM] Raw response:", text);
+          if (text && text.includes("```")) {
+            text = text.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+            console.log("[LLM] Cleaned response:", text);
+          }
+          try {
+            return JSON.parse(text || "[]");
+          } catch (error) {
+            console.error("[LLM] Failed to parse JSON:", error);
+            console.error("[LLM] Problematic text:", text);
+            return [];
+          }
         } catch (error) {
-          console.error("[LLM] Failed to parse JSON:", error);
-          console.error("[LLM] Problematic text:", text);
-          return [];
+          if (attempt === maxRetries - 1) {
+            console.error("[LLM] API call failed after all retries:", error);
+            return [];
+          }
+          console.log(
+            `[LLM] Error occurred, retrying... (attempt ${attempt + 1}/${maxRetries})`
+          );
+          yield delay(1e3 * (attempt + 1));
+          attempt++;
         }
-      } catch (error) {
-        console.error("[LLM] API call failed:", error);
-        return [];
       }
+      return [];
     });
   }
-  var OPENAI_API_KEY;
+  var GROQ_API_KEY;
   var init_llmClient = __esm({
     "shared/llmClient.ts"() {
-      OPENAI_API_KEY = "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";
+      GROQ_API_KEY = "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";
     }
   });
 
@@ -225,8 +257,8 @@ Example response:
             result = yield runLoremIpsumAgent((params == null ? void 0 : params.type) || "paragraph");
           } else if (agent === "resize") {
             result = yield runResizeAgent(
-              (params == null ? void 0 : params.width) || 800,
-              (params == null ? void 0 : params.height) || 600
+              params && (params == null ? void 0 : params.width) || 800,
+              params && (params == null ? void 0 : params.height) || 600
             );
           } else {
             console.warn(`[Orchestrator] Unknown agent: ${agent}`);
@@ -255,7 +287,38 @@ Example response:
     "code.ts"(exports) {
       init_agentOrchestrator();
       figma.showUI(__html__, { width: 400, height: 300 });
+      function getAllNodesInFrame(node) {
+        const allNodes = [node];
+        if ("children" in node && node.children) {
+          for (const child of node.children) {
+            allNodes.push(...getAllNodesInFrame(child));
+          }
+        }
+        return allNodes;
+      }
+      function extractNodeDetails(node) {
+        const details = {
+          id: node.id,
+          name: node.name,
+          type: node.type,
+          width: "absoluteBoundingBox" in node && node.absoluteBoundingBox ? node.absoluteBoundingBox.width : void 0,
+          height: "absoluteBoundingBox" in node && node.absoluteBoundingBox ? node.absoluteBoundingBox.height : void 0
+        };
+        if (node.type === "TEXT" && "characters" in node) {
+          details.text = node.characters;
+          details.fontSize = node.fontSize;
+          details.fontFamily = node.fontName;
+        }
+        if (node.type === "RECTANGLE" || node.type === "ELLIPSE") {
+          details.fills = "fills" in node ? node.fills : void 0;
+        }
+        if (node.type === "FRAME") {
+          details.childrenCount = "children" in node ? node.children.length : 0;
+        }
+        return details;
+      }
       figma.ui.onmessage = (msg) => __async(null, null, function* () {
+        var _a, _b;
         if (msg.type === "run-prompt") {
           const { prompt } = msg;
           const selection = figma.currentPage.selection;
@@ -263,25 +326,82 @@ Example response:
             figma.notify("\u26A0\uFE0F Please select at least one node");
             return;
           }
-          const selectionDetails = selection.map((node) => ({
-            id: node.id,
-            name: node.name,
-            type: node.type,
-            width: "absoluteBoundingBox" in node && node["absoluteBoundingBox"] ? node["absoluteBoundingBox"].width : void 0,
-            height: "absoluteBoundingBox" in node && node["absoluteBoundingBox"] ? node["absoluteBoundingBox"].height : void 0
-          }));
-          console.log("[Plugin] Selection details:", selectionDetails);
-          const combinedPrompt = `
-User request: ${prompt}
+          let allSelectedNodes = [];
+          for (const selectedNode of selection) {
+            if (selectedNode.type === "FRAME" || selectedNode.type === "GROUP" || selectedNode.type === "COMPONENT") {
+              const nodesInContainer = getAllNodesInFrame(selectedNode);
+              allSelectedNodes.push(...nodesInContainer);
+              console.log(
+                `[Plugin] Frame "${selectedNode.name}" contains ${nodesInContainer.length} nodes (including itself)`
+              );
+            } else {
+              allSelectedNodes.push(selectedNode);
+            }
+          }
+          allSelectedNodes = allSelectedNodes.filter(
+            (node, index, array) => array.findIndex((n) => n.id === node.id) === index
+          );
+          console.log(`[Plugin] Total nodes to process: ${allSelectedNodes.length}`);
+          const selectionDetails = allSelectedNodes.map(extractNodeDetails);
+          const nodesByType = allSelectedNodes.reduce((acc, node) => {
+            const type = node.type;
+            if (!acc[type]) acc[type] = [];
+            acc[type].push(node);
+            return acc;
+          }, {});
+          console.log(
+            "[Plugin] Nodes by type:",
+            Object.keys(nodesByType).map(
+              (type) => `${type}: ${nodesByType[type].length}`
+            )
+          );
+          const contextInfo = {
+            userRequest: prompt,
+            totalNodes: allSelectedNodes.length,
+            nodeTypes: Object.keys(nodesByType).map((type) => ({
+              type,
+              count: nodesByType[type].length
+            })),
+            textNodes: ((_a = nodesByType.TEXT) == null ? void 0 : _a.map((node) => ({
+              id: node.id,
+              name: node.name,
+              text: node.characters
+            }))) || [],
+            frames: ((_b = nodesByType.FRAME) == null ? void 0 : _b.map((node) => ({
+              id: node.id,
+              name: node.name,
+              childrenCount: "children" in node ? node.children.length : 0
+            }))) || [],
+            selectionDetails
+          };
+          const combinedPrompt = `User request: ${prompt}
 
-Figma selection:
-${JSON.stringify(selectionDetails, null, 2)}
-    `;
-          const results = yield agentOrchestrator(combinedPrompt);
-          figma.ui.postMessage({
-            type: "orchestrator-results",
-            results
-          });
+Figma context:
+- Total nodes selected: ${contextInfo.totalNodes}
+- Node types: ${contextInfo.nodeTypes.map((nt) => `${nt.type} (${nt.count})`).join(", ")}
+- Text nodes found: ${contextInfo.textNodes.length}
+- Frames found: ${contextInfo.frames.length}
+
+Selection details:
+${JSON.stringify(contextInfo, null, 2)}`;
+          console.log("[Plugin] Combined prompt:", combinedPrompt);
+          try {
+            figma.notify("\u{1F916} Processing your request...");
+            const results = yield agentOrchestrator(combinedPrompt);
+            figma.ui.postMessage({
+              type: "orchestrator-results",
+              results,
+              nodeContext: contextInfo
+            });
+            figma.notify("\u2705 Request completed!");
+          } catch (error) {
+            console.error("[Plugin] Error during orchestration:", error);
+            figma.notify("\u274C Something went wrong. Check console for details.");
+            figma.ui.postMessage({
+              type: "orchestrator-error",
+              error: String(error)
+            });
+          }
         }
       });
     }
