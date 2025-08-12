@@ -310,9 +310,6 @@
       </div>
       <div class="main">
         <div class="prompt-label">What can I help you with?</div>
-        <div class="prompt-example">
-          Example: Translate this frame to French and resize for mobile
-        </div>
         <textarea
           id="prompt-input"
           class="prompt-input"
@@ -418,6 +415,31 @@
           generateBtn.click();
         }
       });
+
+      // Dynamic placeholder logic
+      // const promptInput = document.getElementById("prompt-input");
+      const placeholders = [
+        "🚀 Translate this frame to Japanese and make it pop!",
+        "🎨 Resize for mobile and add a splash of color!",
+        "🦄 Make all text magical and responsive!",
+        "🌍 Localize for Spanish and adjust contrast!",
+        "🤖 Fill empty fields with smart dummy content!",
+        "✨ Give this design a futuristic vibe!",
+        "📱 Optimize for mobile and translate to French!",
+        "🔮 Make everything look enchanted and readable!",
+        "🎉 Add playful text and resize for tablet!",
+        "🧠 Make the UI smarter and more accessible!",
+      ];
+      let placeholderIndex = 0;
+
+      function updatePlaceholder() {
+        promptInput.placeholder = placeholders[placeholderIndex];
+        placeholderIndex = (placeholderIndex + 1) % placeholders.length;
+      }
+
+      setInterval(updatePlaceholder, 3000);
+      // Set initial placeholder
+      updatePlaceholder();
     </script>
   </body>
 </html>
