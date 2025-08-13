@@ -3,6 +3,7 @@ export interface AgentResponse {
   message: string;
   data?: any;
   error?: string;
+  frameData?: any;
 }
 
 export interface TranslationRequest {
