@@ -3,6 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <title>Translation Agent</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       * {
         box-sizing: border-box;
@@ -13,8 +17,8 @@
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           Oxygen, Ubuntu, Cantarell, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: #333;
+        background: linear-gradient(135deg, #232526 0%, #414345 100%);
+        color: #e2e8f0;
         font-size: 14px;
         line-height: 1.5;
         height: 100vh;
@@ -30,9 +34,9 @@
       }
 
       .header {
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba(36, 39, 46, 0.85);
         backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(67, 67, 67, 0.5);
         padding: 16px 20px;
         display: flex;
         align-items: center;
@@ -42,36 +46,45 @@
       }
 
       .header-title {
-        color: white;
+        font-family: "Montserrat", "Segoe UI", Arial, sans-serif;
+        color: #c2c9d8;
         font-weight: 600;
         font-size: 18px;
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        transition: opacity 0.5s;
+        opacity: 1;
+      }
+      .header-title.is-out {
+        opacity: 0;
+      }
+      .header-title.is-in {
+        opacity: 1;
       }
 
       .header-info {
         width: 24px;
         height: 24px;
-        background: rgba(255, 255, 255, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.4);
+        background: rgba(67, 67, 67, 0.7);
+        border: 1px solid #2d3748;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
+        color: #f8fafc;
         font-weight: bold;
         cursor: pointer;
         transition: all 0.2s ease;
       }
 
       .header-info:hover {
-        background: rgba(255, 255, 255, 0.4);
+        background: #2d3748;
         transform: scale(1.1);
       }
 
       .main {
-        background: rgba(255, 255, 255, 0.95);
+        background: rgba(36, 39, 46, 0.97);
         backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        border: 1px solid #2d3748;
         border-radius: 0 0 12px 12px;
         margin: 0 20px 20px 20px;
         padding: 24px;
@@ -79,55 +92,46 @@
         display: flex;
         flex-direction: column;
         gap: 16px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
       }
 
       .prompt-label {
         font-size: 18px;
         font-weight: 600;
-        color: #2d3748;
+        color: #90cdf4;
         margin-bottom: 4px;
-      }
-
-      .prompt-example {
-        font-size: 13px;
-        color: #718096;
-        background: rgba(113, 128, 150, 0.1);
-        padding: 12px;
-        border-radius: 8px;
-        border-left: 3px solid #667eea;
-        margin-bottom: 8px;
       }
 
       .prompt-input {
         width: 100%;
         padding: 14px 16px;
-        border: 2px solid #e2e8f0;
+        border: 2px solid #4a5568;
         border-radius: 12px;
         font-size: 14px;
         font-family: inherit;
         resize: vertical;
         min-height: 80px;
-        background: white;
+        background: #23272f;
+        color: #e2e8f0;
         transition: all 0.3s ease;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
       }
 
       .prompt-input:focus {
         outline: none;
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1),
-          0 4px 12px rgba(0, 0, 0, 0.1);
+        border-color: #90cdf4;
+        box-shadow: 0 0 0 3px rgba(144, 205, 244, 0.15),
+          0 4px 12px rgba(0, 0, 0, 0.15);
         transform: translateY(-1px);
       }
 
       .prompt-input::placeholder {
-        color: #a0aec0;
+        color: #718096;
       }
 
       .generate-btn {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: linear-gradient(135deg, #3182ce 0%, #2d3748 100%);
+        color: #f8fafc;
         border: none;
         padding: 14px 28px;
         border-radius: 12px;
@@ -137,12 +141,13 @@
         transition: all 0.3s ease;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 4px 15px rgba(49, 130, 206, 0.15);
       }
 
       .generate-btn:hover:not(:disabled) {
+        background: linear-gradient(135deg, #2d3748 0%, #3182ce 100%);
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        box-shadow: 0 6px 20px rgba(49, 130, 206, 0.25);
       }
 
       .generate-btn:active:not(:disabled) {
@@ -150,7 +155,7 @@
       }
 
       .generate-btn:disabled {
-        background: #cbd5e0;
+        background: #4a5568;
         cursor: not-allowed;
         transform: none;
         box-shadow: none;
@@ -158,13 +163,13 @@
 
       .process-log {
         margin-top: auto;
-        border-top: 1px solid #e2e8f0;
+        border-top: 1px solid #4a5568;
         padding-top: 16px;
       }
 
       .process-log-title {
         font-weight: 600;
-        color: #4a5568;
+        color: #90cdf4;
         cursor: pointer;
         user-select: none;
         padding: 8px 0;
@@ -175,16 +180,16 @@
       }
 
       .process-log-title:hover {
-        color: #667eea;
+        color: #3182ce;
       }
 
       .process-log-list {
         max-height: 180px;
         overflow-y: auto;
-        background: #f7fafc;
+        background: #23272f;
         border-radius: 8px;
         padding: 12px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #4a5568;
       }
 
       .log-item {
@@ -217,20 +222,20 @@
       }
 
       .log-dot.waiting {
-        background: #cbd5e0;
+        background: #4a5568;
       }
 
       .log-dot.processing {
-        background: #ed8936;
+        background: #3182ce;
         animation: pulse 1.5s infinite;
       }
 
       .log-dot.done {
-        background: #48bb78;
+        background: #38b2ac;
       }
 
       .log-dot.error {
-        background: #f56565;
+        background: #e53e3e;
       }
 
       @keyframes pulse {
@@ -251,36 +256,32 @@
       }
 
       .process-log-list::-webkit-scrollbar-track {
-        background: #edf2f7;
+        background: #23272f;
         border-radius: 3px;
       }
 
       .process-log-list::-webkit-scrollbar-thumb {
-        background: #cbd5e0;
+        background: #4a5568;
         border-radius: 3px;
       }
 
       .process-log-list::-webkit-scrollbar-thumb:hover {
-        background: #a0aec0;
+        background: #3182ce;
       }
 
-      /* Responsive adjustments */
       @media (max-height: 500px) {
         .process-log-list {
           max-height: 100px;
         }
-
         .main {
           padding: 16px;
           gap: 12px;
         }
-
         .header {
           padding: 12px 16px;
         }
       }
 
-      /* Loading state animations */
       .generate-btn:disabled::after {
         content: "";
         width: 16px;
@@ -310,9 +311,6 @@
       </div>
       <div class="main">
         <div class="prompt-label">What can I help you with?</div>
-        <div class="prompt-example">
-          Example: Translate this frame to French and resize for mobile
-        </div>
         <textarea
           id="prompt-input"
           class="prompt-input"
@@ -338,12 +336,14 @@
       const promptInput = document.getElementById("prompt-input");
       const logList = document.getElementById("process-log-list");
       const logToggle = document.getElementById("log-toggle");
+      const headerTitle = document.querySelector(".header-title");
 
       generateBtn.onclick = function () {
         const prompt = promptInput.value.trim();
 
         if (!prompt) {
           addLogItem("Please enter a prompt", "error");
+          resetButton();
           return;
         }
 
@@ -389,6 +389,9 @@
         } else if (msg.type === "error") {
           addLogItem(`Error: ${msg.message}`, "error");
           resetButton();
+        } else if (msg.type === "selection-error") {
+          addLogItem(msg.message, "error");
+          resetButton("Select nodes & try again");
         }
       };
 
@@ -403,9 +406,9 @@
         logList.scrollTop = logList.scrollHeight;
       }
 
-      function resetButton() {
+      function resetButton(text = "Generate") {
         generateBtn.disabled = false;
-        generateBtn.textContent = "Generate";
+        generateBtn.textContent = text;
       }
 
       // Enable Enter key to submit
@@ -414,6 +417,64 @@
           generateBtn.click();
         }
       });
+
+      // Dynamic placeholder logic
+      // const promptInput = document.getElementById("prompt-input");
+      const placeholders = [
+        "🚀 Translate this frame to Danish and make it pop!",
+        "🎨 Resize for mobile and add a splash of color!",
+        "🦄 Make all text magical and responsive!",
+        "🌍 Localize for Spanish and adjust contrast!",
+        "🤖 Fill empty fields with smart dummy content!",
+        "✨ Give this design a futuristic vibe!",
+        "📱 Optimize for mobile and translate to French!",
+        "🔮 Make everything look enchanted and readable!",
+        "🎉 Add playful text and resize for tablet!",
+        "🧠 Make the UI smarter and more accessible!",
+      ];
+      let placeholderIndex = 0;
+
+      function updatePlaceholder() {
+        promptInput.placeholder = placeholders[placeholderIndex];
+        placeholderIndex = (placeholderIndex + 1) % placeholders.length;
+      }
+
+      setInterval(updatePlaceholder, 3000);
+      // Set initial placeholder
+      updatePlaceholder();
+
+      // Dynamic title logic
+      const titleVariants = [
+        "Translation Agent",
+        "Content Filler Agent",
+        "Contrast Agent",
+        "Resize Agent",
+        "Mobile Optimizer",
+      ];
+      let titleIndex = 0;
+
+      function updateTitle() {
+        // Fade out
+        headerTitle.classList.add("is-out");
+        setTimeout(() => {
+          // Change title text
+          headerTitle.textContent = titleVariants[titleIndex];
+          document.title = titleVariants[titleIndex];
+          // Fade in
+          headerTitle.classList.remove("is-out");
+          headerTitle.classList.add("is-in");
+          // Prepare for next transition
+          setTimeout(() => {
+            headerTitle.classList.remove("is-in");
+          }, 500);
+        }, 500);
+        titleIndex = (titleIndex + 1) % titleVariants.length;
+      }
+
+      setInterval(updateTitle, 3000);
+      // Set initial title
+      headerTitle.textContent = titleVariants[0];
+      document.title = titleVariants[0];
     </script>
   </body>
 </html>
