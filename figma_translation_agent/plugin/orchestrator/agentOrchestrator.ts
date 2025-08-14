@@ -20,22 +20,21 @@ const agentRegistry: Record<
   //     ),
   //   translate: async (params, context) =>
   // translateAgent({ ...params, frameId: params.frameId || context.frameId }),
-  //   lorem: async (params, context) =>
-  //     runLoremIpsumAgent({
-  //       ...params,
-  //       frameId: params.frameId || context.frameId,
-  //     }),
-  //   contentFiller: async (params, context) =>
-  //     runLoremIpsumAgent({
-  //       ...params,
-  //       frameId: params.frameId || context.frameId,
-  //     }),
+  lorem: async (params, context) =>
+    runLoremIpsumAgent(
+      params, context
+    ),
+  contentFiller: async (params, context) =>
+    runLoremIpsumAgent(
+      params, context
+    ),
   //   contrastChecker: async (params, context) =>
   //     runContrastCheckerAgent({
   //       ...params,
   //       frameId: params.frameId || context.frameId,
   //     }),
 };
+
 
 export async function agentOrchestrator(
   combinedPrompt: any
@@ -55,7 +54,7 @@ export async function agentOrchestrator(
   };
 
   for (const task of tasks) {
-    const { agent, params } = task;
+    const { agent = "lorem", params } = task;
     const runAgent = agentRegistry[agent];
 
     if (!runAgent) {
@@ -65,8 +64,8 @@ export async function agentOrchestrator(
     }
 
     try {
-      const result = await runAgent(params, context);
       console.log("details sent to agent:", { params, context });
+      const result = await runAgent(params, context);
 
       // Merge returned data into shared context for next agent
       if (result.data) {
