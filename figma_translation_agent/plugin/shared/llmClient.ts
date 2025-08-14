@@ -17,6 +17,28 @@ AVAILABLE AGENTS:
 - lorem/contentFiller: Fills empty text fields with dummy content
 - contrastChecker: Analyzes and fixes color contrast issues
 
+WHEN TO USE EACH AGENT:
+
+RESIZE AGENT - Use when user mentions:
+- Specific dimensions: "800x600", "resize to 1000x500"
+- Device sizes: "mobile", "tablet", "desktop"
+- Size changes: "make bigger", "resize", "change size"
+
+LOREM/CONTENTFILLER AGENT - Use when user wants to:
+- Add text content: "add text", "fill with content", "add placeholder text"
+- Add names: "add name", "add title", "add heading"
+- Fill empty fields: "fill form", "add dummy data", "populate content"
+- Add sample content: "lorem ipsum", "fake content", "test data"
+- anything with adding text to the existing things 
+
+TRANSLATE AGENT - Use when user mentions:
+- Language changes: "translate to spanish", "convert to french"
+- Language names: "spanish", "french", "german", etc.
+
+CONTRASTCHECKER AGENT - Use when user mentions:
+- Accessibility: "check contrast", "accessibility", "readable"
+- Color issues: "fix colors", "contrast problems"
+
 PARAMETER RULES:
 
 RESIZE:
@@ -26,33 +48,36 @@ RESIZE:
 
 TRANSLATE:
 - Extract target language: "to spanish" → language: "spanish"
-- frameAction: "update" (usually works on existing/new frame)
+- frameAction: "update"
 
 LOREM/CONTENTFILLER:
-- type: "lorem", "realistic", "form"
+- type: "realistic" (names, titles), "lorem" (lorem ipsum), "form" (form fields)
 - frameAction: "update"
 
 CONTRASTCHECKER:
-- mode: "check" (analyze only), "fix" (auto-fix), "suggest" (recommend changes)
-- standard: "AA" (4.5:1 ratio), "AAA" (7:1 ratio)
-- scope: "text" (text only), "all" (all elements), "backgrounds"
-- autoFix: true (apply fixes), false (report only)
-- minContrast: 4.5 (custom ratio)
+- mode: "check", "fix", "suggest"
+- standard: "AA", "AAA"
 
 RESPONSE FORMAT: JSON array only, no markdown, no explanation.
 
 Examples:
-User: "resize to 800x600 and translate to french"
-[{"agent":"resize","params":{"width":800,"height":600,"frameAction":"new"}},{"agent":"translate","params":{"language":"french","frameAction":"update"}}]
+User: "resize to 800x600"
+[{"agent":"resize","params":{"width":800,"height":600,"frameAction":"new"}}]
 
-User: "check color contrast"
-[{"agent":"contrastChecker","params":{"mode":"check","standard":"AA","scope":"text"}}]
+User: "add name"
+[{"agent":"lorem","params":{"type":"realistic","frameAction":"update"}}]
 
-User: "fix accessibility issues"
-[{"agent":"contrastChecker","params":{"mode":"fix","standard":"AA","scope":"all","autoFix":true}}]
+User: "fill with content"
+[{"agent":"lorem","params":{"type":"lorem","frameAction":"update"}}]
 
-User: "analyze contrast and suggest improvements"
-[{"agent":"contrastChecker","params":{"mode":"suggest","standard":"AAA","scope":"text","autoFix":false}}]`;
+User: "add title and description"
+[{"agent":"lorem","params":{"type":"realistic","frameAction":"update"}}]
+
+User: "translate to spanish"
+[{"agent":"translate","params":{"language":"spanish","frameAction":"update"}}]
+
+User: "resize to mobile and add content"
+[{"agent":"resize","params":{"width":375,"height":812,"frameAction":"new"}},{"agent":"lorem","params":{"type":"lorem","frameAction":"update"}}]`;
 
   const maxRetries = 3;
   let attempt = 0;
