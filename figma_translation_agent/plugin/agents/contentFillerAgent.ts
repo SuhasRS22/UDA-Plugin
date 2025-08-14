@@ -1,11 +1,59 @@
 /// <reference types="@figma/plugin-typings" />
 
-import { llmClient } from "../shared/llmClient";
+import { llmTextClient } from "../shared/llmClient";
 import { AgentResponse } from "../utils/types";
 
-// Helper function to detect available font or use fallback
-async function getAvailableFont(selection: readonly SceneNode[]): Promise<FontName> {
-  // Check if there are existing text nodes with fonts
+function parseJsonFromLLMResponse(response: string): any {
+  let jsonText = response.trim();
+
+  if (jsonText.includes("```json")) {
+    jsonText = jsonText.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+  }
+  if (jsonText.includes("```")) {
+    jsonText = jsonText.replace(/```\s*/g, "");
+  }
+
+  try {
+    return JSON.parse(jsonText);
+  } catch (error) {
+    // Continue to pattern extraction
+  }
+
+  const objectMatch = jsonText.match(/\{[\s\S]*?\}/);
+  if (objectMatch) {
+    try {
+      return JSON.parse(objectMatch[0]);
+    } catch (error) {
+      // Continue to array pattern
+    }
+  }
+
+  const arrayMatch = jsonText.match(/\[[\s\S]*?\]/);
+  if (arrayMatch) {
+    try {
+      return JSON.parse(arrayMatch[0]);
+    } catch (error) {
+      // Final fallback will throw
+    }
+  }
+
+  throw new Error("Could not extract valid JSON from LLM response");
+}
+
+async function getAvailableFont(selection: readonly SceneNode[], figmaContext?: any): Promise<FontName> {
+  if (figmaContext?.nodes?.text?.length > 0) {
+    for (const textNode of figmaContext.nodes.text) {
+      if (typeof textNode.fontName === 'object') {
+        try {
+          await figma.loadFontAsync(textNode.fontName as FontName);
+          return textNode.fontName as FontName;
+        } catch (error) {
+          // Continue to try other fonts from context
+        }
+      }
+    }
+  }
+
   let existingFont: FontName | null = null;
 
   function findTextFont(node: SceneNode): boolean {
@@ -23,208 +71,217 @@ async function getAvailableFont(selection: readonly SceneNode[]): Promise<FontNa
     return false;
   }
 
-  // Look for existing fonts in selection
   for (const item of selection) {
     if (findTextFont(item)) break;
   }
 
-  // If we found an existing font, try to use it
   if (existingFont) {
     try {
       await figma.loadFontAsync(existingFont);
       return existingFont;
     } catch (error) {
-      // Fall through to fallbacks
+      // Fall through to Roboto default
     }
   }
 
-  // Fallback fonts in order of preference
-  const fallbackFonts: FontName[] = [
-    { family: "Roboto", style: "Regular" },
-    { family: "Inter", style: "Regular" },
-    { family: "Arial", style: "Regular" },
-    { family: "Helvetica", style: "Regular" }
-  ];
-
-  for (const font of fallbackFonts) {
-    try {
-      await figma.loadFontAsync(font);
-      return font;
-    } catch (error) {
-      // Try next font
-    }
+  const defaultFont = { family: "Roboto", style: "Regular" };
+  try {
+    await figma.loadFontAsync(defaultFont);
+    return defaultFont;
+  } catch (error) {
+    return defaultFont;
   }
-
-  // Ultimate fallback
-  const ultimateFont = { family: "Roboto", style: "Regular" };
-  await figma.loadFontAsync(ultimateFont);
-  return ultimateFont;
 }
 
-/**
- * Enhanced Content Filler Agent - Main Entry Point
- * 
- * Supports dual parameter formats:
- * 1. Legacy: runLoremIpsumAgent(type, forceFill, customContent)
- * 2. Orchestrator: runLoremIpsumAgent(params, context)
- * 
- * Orchestrator params object supports:
- * - type: string (content type like "paragraph", "name", "email")
- * - forceFill: boolean (force content replacement)
- * - customContent: string (specific content to use)
- * - frameAction: string ("update", "fill" - implies forceFill)
- * 
- * Context object contains:
- * - figmaContext: rich analysis with nodes, layout, text analysis
- * - frameId: target frame identifier
- */
 export async function runLoremIpsumAgent(
   parameters: any,
-  contextParams: any, 
-  customContent?: string
+  contextParams: any,
 ): Promise<AgentResponse> {
-  
-  // Handle orchestrator format: runLoremIpsumAgent(params, context)
+
   let type: string;
   let forceFill: boolean;
   let content: string | undefined;
-  let figmaContext: any = null;
-  let selection: readonly SceneNode[];
-  console.log("[ContentFiller] Orchestrator mode - params:", parameters);
-  console.log("[ContentFiller] Context received:", contextParams);
 
-  if (typeof parameters === 'object' && contextParams && typeof contextParams === 'object') {
-    // Orchestrator format: (params, context)
-    const params = parameters;
-    const context = contextParams;
-    
-    // Extract from params - handle various parameter combinations
-    type = params.type || "paragraph";
-    forceFill = params.forceFill || false;
-    content = params.customContent;
-    
-    // Handle frameAction parameter for frame-specific operations
-    const frameAction = params.frameAction;
-    if (frameAction === "update" || frameAction === "fill") {
-      forceFill = true; // frameAction "update" implies we should fill/update content
-    }
-    
-    // Extract figmaContext and selection from context
-    figmaContext = context.figmaContext;
-    if (figmaContext && figmaContext.nodes && figmaContext.nodes.all) {
-      selection = figmaContext.nodes.all;
-    } else {
-      selection = figma.currentPage.selection;
-    }
-    
-    // Use userPrompt from figmaContext if no custom content
-    if (!content && figmaContext && figmaContext.userPrompt) {
-      content = figmaContext.userPrompt;
-    }
-    
-    console.log("[ContentFiller] Orchestrator mode - params:", params);
-    console.log("[ContentFiller] Context received:", {
-      hasContext: !!figmaContext,
-      nodeCount: figmaContext?.nodes?.all?.length || 0,
-      textNodes: figmaContext?.nodes?.text?.length || 0,
-      userPrompt: figmaContext?.userPrompt,
-      frameAction: frameAction
-    });
-    
-  } else {
-    // Legacy format: (type, forceFill, customContent)
-    type = typeof parameters === 'string' ? parameters : "paragraph";
-    forceFill = typeof contextParams === 'boolean' ? contextParams : false;
-    content = customContent;
-    selection = figma.currentPage.selection;
-    
-    console.log("[ContentFiller] Legacy mode - type:", type, "forceFill:", forceFill);
+  let figmaContext = contextParams.figmaContext || null;
+
+  const params = parameters;
+  const context = figmaContext;
+
+  type = params.type || "paragraph";
+  forceFill = params.forceFill || false;
+  content = context?.userPrompt || params.customContent;
+
+  const frameAction = params.frameAction;
+  if (frameAction === "update") {
+    forceFill = true;
   }
 
-  // Enhanced parameter handling combining both approaches
-  if (content && content.trim()) {
-    return await handleAdvancedContentGeneration(selection, content, forceFill, figmaContext);
+  const selection = figma.currentPage.selection;
+
+  if (content && typeof content === 'string' && content.trim()) {
+    try {
+      return await handleAdvancedContentGeneration(selection, content, forceFill, figmaContext);
+    } catch (error) {
+      console.error("[ContentFiller] Critical error during content generation:", error);
+      figma.notify(`❌ Content generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`, { timeout: 4000 });
+      return {
+        success: false,
+        message: `Content generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 
-  // Legacy type-based content generation with enhanced intelligence
-  return await handleTypedContentGeneration(selection, type, forceFill);
+  return {
+    success: false,
+    message: "No content prompt provided in figmaContext or parameters"
+  };
 }
 
-/**
- * Advanced content generation combining best approaches from both agents
- */
 async function handleAdvancedContentGeneration(
-  selection: readonly SceneNode[], 
-  userPrompt: string, 
-  forceFill: boolean, 
+  selection: readonly SceneNode[],
+  userPrompt: string,
+  forceFill: boolean,
   figmaContext?: any
 ): Promise<AgentResponse> {
-  // Use figmaContext data if available for enhanced analysis
+
   let frameDetails;
   if (figmaContext && figmaContext.nodes) {
+    const actualTextNodes: TextNode[] = [];
+    if (figmaContext.nodes.text && figmaContext.nodes.text.length > 0) {
+      for (const textNodeData of figmaContext.nodes.text) {
+        try {
+          const actualNode = await figma.getNodeByIdAsync(textNodeData.id);
+          if (actualNode && actualNode.type === "TEXT") {
+            actualTextNodes.push(actualNode);
+          }
+        } catch (error) {
+          // Node not found
+        }
+      }
+    }
+
     frameDetails = {
-      selectedNodes: figmaContext.nodes.all || selection,
-      textNodes: figmaContext.nodes.text || [],
+      selectedNodes: (figmaContext.nodes.all && figmaContext.nodes.all.length > 0)
+        ? figmaContext.nodes.all
+        : selection,
+      textNodes: actualTextNodes,
       containers: figmaContext.nodes.frames || [],
       nodeCount: figmaContext.summary?.totalNodes || selection.length,
       hasTextFields: figmaContext.summary?.hasText || false,
-      // Additional context from figmaContext
       layoutAnalysis: figmaContext.layoutAnalysis,
       textAnalysis: figmaContext.textAnalysis
     };
-    
-    console.log("[ContentFiller] Using figmaContext analysis:", {
-      totalNodes: frameDetails.nodeCount,
-      textNodes: frameDetails.textNodes.length,
-      hasLayout: !!frameDetails.layoutAnalysis,
-      hasTextAnalysis: !!frameDetails.textAnalysis
-    });
   } else {
     frameDetails = analyzeSelection(selection);
   }
-  
-  // Enhanced logic to detect user intent (from newContentFillerAgent)
+
   const isReplaceRequest = userPrompt.toLowerCase().includes('replace') ||
-      userPrompt.toLowerCase().includes('change') ||
-      userPrompt.toLowerCase().includes('update') ||
-      forceFill; // forceFill implies replace
+    userPrompt.toLowerCase().includes('change') ||
+    userPrompt.toLowerCase().includes('update') ||
+    forceFill;
 
   const isAddRequest = userPrompt.toLowerCase().includes('add') ||
-      userPrompt.toLowerCase().includes('also') ||
-      userPrompt.toLowerCase().includes('more') ||
-      userPrompt.toLowerCase().includes('additional') ||
-      userPrompt.toLowerCase().includes('new') ||
-      // If there's existing content and user says "generate" something different, treat as add
-      (frameDetails.textNodes.length > 0 && userPrompt.toLowerCase().includes('generate') && 
-       !userPrompt.toLowerCase().includes('replace') && !userPrompt.toLowerCase().includes('update') && !forceFill);
+    userPrompt.toLowerCase().includes('also') ||
+    userPrompt.toLowerCase().includes('more') ||
+    userPrompt.toLowerCase().includes('additional') ||
+    userPrompt.toLowerCase().includes('new') ||
+    (frameDetails.textNodes.length > 0 && userPrompt.toLowerCase().includes('generate') &&
+      !userPrompt.toLowerCase().includes('replace') && !userPrompt.toLowerCase().includes('update') && !forceFill);
 
-  // Validation
-  if (selection.length === 0) {
+  if (frameDetails.selectedNodes.length === 0) {
     return {
       success: false,
-      message: "Please select frames or text areas to generate content"
+      message: "No nodes available - please select frames or text areas"
     };
   }
 
   try {
-    // Decide action based on intent and existing content
-    if (isReplaceRequest && frameDetails.textNodes.length > 0) {
-      return await updateExistingContent(userPrompt, frameDetails.textNodes, figmaContext);
-    } else if (frameDetails.textNodes.length > 0 && !isAddRequest && !forceFill) {
+    if (frameDetails.textNodes.length > 0 && isReplaceRequest) {
+      return await performSmartTextReplacement(frameDetails.textNodes, userPrompt, figmaContext);
+    }
+
+    if (frameDetails.textNodes.length > 0 && !isAddRequest) {
       return await updateExistingContent(userPrompt, frameDetails.textNodes, figmaContext);
     } else {
       return await createNewContent(userPrompt, frameDetails, isAddRequest, figmaContext);
     }
   } catch (error) {
-    console.error("[MergedContentFiller] Error:", error);
+    console.error("[ContentFiller] Error:", error);
     return {
       success: false,
       message: `Content generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
   }
-}/**
- * Analyze selection to extract frame details
- */
+}
+
+async function performSmartTextReplacement(
+  textNodes: TextNode[],
+  userPrompt: string,
+  figmaContext?: any
+): Promise<AgentResponse> {
+  let replacedCount = 0;
+  const font = await getAvailableFont(textNodes, figmaContext);
+
+  for (let i = 0; i < textNodes.length; i++) {
+    const textNode = textNodes[i];
+
+    if (!textNode) {
+      continue;
+    }
+
+    const currentText = textNode.characters || "";
+
+    const prompt = `You are a text replacement assistant. Perform the requested text transformation and return ONLY the new text.
+
+CURRENT TEXT: "${currentText}"
+USER REQUEST: "${userPrompt}"
+
+INSTRUCTIONS:
+1. If request is "update [word] to [newword]", find that word and replace it with the new word
+2. If request is "change [phrase] to [newphrase]", find that phrase and replace it  
+3. Preserve the original case style (UPPERCASE stays UPPERCASE, lowercase stays lowercase)
+4. Return ONLY the modified text, no explanations, no quotes
+
+EXAMPLES:
+Input: "HELLO WORLD" + "update hello to hi" → Output: HI WORLD
+Input: "Hello World" + "update hello to hi" → Output: Hi World
+Input: "FIRST THING" + "update first to last" → Output: LAST THING
+Input: "First Thing" + "update first to last" → Output: Last Thing
+
+Your task: Transform "${currentText}" based on "${userPrompt}"
+Return only the new text:`;
+
+    try {
+      const newText = await llmTextClient(prompt);
+
+      if (newText && newText !== currentText && newText.length > 0) {
+        await figma.loadFontAsync(font);
+        textNode.fontName = font;
+        textNode.characters = newText;
+        replacedCount++;
+      }
+    } catch (error) {
+      console.error(`[ContentFiller] Error processing node ${textNode.name}:`, error);
+    }
+  }
+
+  if (replacedCount > 0) {
+    figma.currentPage.selection = textNodes;
+    figma.notify(`✅ Updated ${replacedCount} text fields`, { timeout: 3000 });
+
+    return {
+      success: true,
+      message: `Updated ${replacedCount} text fields based on your request`
+    };
+  } else {
+    return {
+      success: false,
+      message: `No changes made to text fields`
+    };
+  }
+}
+
 function analyzeSelection(selection: readonly SceneNode[]) {
   const textNodes: TextNode[] = [];
   const containers: (FrameNode | GroupNode | ComponentNode | InstanceNode)[] = [];
@@ -257,86 +314,6 @@ function analyzeSelection(selection: readonly SceneNode[]) {
   };
 }
 
-/**
- * Handle typed content generation (legacy approach with enhancements)
- */
-async function handleTypedContentGeneration(selection: readonly SceneNode[], type: string, forceFill: boolean): Promise<AgentResponse> {
-  let filledCount = 0;
-
-  async function processNode(node: SceneNode) {
-    if (node.type === "TEXT" && !node.locked) {
-      const textNode = node as TextNode;
-
-      // Enhanced condition: fill if empty, whitespace only, placeholder text, or forceFill
-      const shouldFill = forceFill || (
-        textNode.characters === "" ||
-        textNode.characters.trim() === "" ||
-        textNode.characters === "Type something" ||
-        textNode.characters.startsWith("Lorem ipsum") ||
-        textNode.characters.length < 5
-      );
-
-      if (shouldFill) {
-        try {
-          await figma.loadFontAsync(textNode.fontName as FontName);
-          const prompt = generatePrompt(type);
-          const generatedText = await llmClient(prompt);
-
-          // Enhanced content processing with validation
-          let textContent: string;
-          if (Array.isArray(generatedText)) {
-            textContent = generatedText[0] ? String(generatedText[0]) : "Professional Sample Content";
-          } else {
-            textContent = String(generatedText);
-          }
-
-          // Content quality validation
-          if (textContent.length === 0) {
-            textContent = "Quality Content Generated";
-          }
-
-          preserveAndSetText(textNode, textContent);
-          filledCount++;
-        } catch (error) {
-          console.error(`[MergedContentFiller] Error filling text node: ${error}`);
-        }
-      }
-    } else if ("children" in node) {
-      for (const child of node.children) {
-        await processNode(child);
-      }
-    }
-  }
-
-  for (const node of selection) {
-    await processNode(node);
-  }
-
-  figma.notify(`✅ Filled ${filledCount} text fields`, { timeout: 2000 });
-
-  return {
-    success: true,
-    message: `Filled ${filledCount} text fields with intelligent content.`,
-  };
-}
-
-// Enhanced prompt generation with advanced intelligence
-function generatePrompt(type: string): string {
-  switch (type) {
-    case "name":
-      return "Generate a realistic human name that sounds natural and professional. Examples: Sarah Johnson, Michael Chen, David Wilson. Respond with just the name.";
-    case "email":
-      return "Generate a realistic professional email address with a believable domain. Examples: sarah.j@company.com, michael@tech.io, david@startup.co. Respond with just the email.";
-    case "address":
-      return "Generate a realistic street address with proper formatting. Examples: 123 Main Street, New York, NY 10001. Respond with just the address.";
-    case "product":
-      return "Generate a realistic, modern product name that sounds professional and marketable. Examples: UltraPhone Pro, SecureVault, CloudSync. Respond with just the product name.";
-    default:
-      return "Generate realistic, professional content appropriate for UI mockups. Make it look natural and believable, not templated. Examples: Project Alpha, Marketing Team, Sales Report.";
-  }
-}
-
-// Preserves text styles and sets content
 function preserveAndSetText(node: TextNode, text: string | any) {
   const style = {
     fontSize: node.fontSize,
@@ -345,26 +322,28 @@ function preserveAndSetText(node: TextNode, text: string | any) {
     textAlignVertical: node.textAlignVertical,
   };
 
-  // Ensure we always set a string
   node.characters = String(text);
   Object.assign(node, style);
 }
 
-/**
- * Update existing text nodes with new content (enhanced with figmaContext)
- */
 async function updateExistingContent(userPrompt: string, textNodes: TextNode[], figmaContext?: any): Promise<AgentResponse> {
-  // Create form structure for LLM with enhanced context
-  const formStructure = textNodes.map((node, index) => ({
-    index,
-    name: node.name,
-    current: node.characters,
-    isEmpty: node.characters.trim() === "" || node.characters === "Type something" || node.characters.startsWith("Lorem"),
-    fontSize: typeof node.fontSize === 'symbol' ? String(node.fontSize) : node.fontSize,
-    fontFamily: typeof node.fontName === 'object' ? (node.fontName as FontName).family : 'Unknown'
-  }));
+  const formStructure = textNodes.map((node, index) => {
+    const getFontInfo = (fontName: FontName | symbol) =>
+      typeof fontName === 'object' ? fontName.family : 'mixed';
 
-  // Add context information if available
+    const getFontSize = (fontSize: number | symbol) =>
+      typeof fontSize === 'number' ? fontSize.toString() : 'mixed';
+
+    return {
+      index,
+      name: node.name,
+      current: node.characters,
+      isEmpty: !node.characters || node.characters.trim() === "" || node.characters === "Type something" || node.characters.startsWith("Lorem"),
+      fontSize: getFontSize(node.fontSize),
+      fontFamily: getFontInfo(node.fontName)
+    };
+  });
+
   let contextInfo = "";
   if (figmaContext) {
     if (figmaContext.textAnalysis) {
@@ -375,54 +354,62 @@ async function updateExistingContent(userPrompt: string, textNodes: TextNode[], 
     }
   }
 
-  // Generate content using LLM with enhanced context
-  const prompt = `Generate content for existing text fields based on user request and context.
-
-USER REQUEST: "${userPrompt}"
+  const prompt = `USER REQUEST: "${userPrompt}"
 
 EXISTING FIELDS:
 ${formStructure.map(field =>
-    `Field ${field.index}: "${field.name}" (current: "${field.current}", empty: ${field.isEmpty}, font: ${field.fontFamily}, size: ${field.fontSize})`
-  ).join('\n')}${contextInfo}
+    `Field ${field.index}: "${field.name}" (current: "${field.current}", empty: ${field.isEmpty})`
+  ).join('\n')}
 
-INSTRUCTIONS:
-- Consider the context analysis to match existing style and patterns
-- Generate content that fits the layout and text analysis
-- If they ask for "email" or "emails" ONLY, generate ONLY email addresses
-- If they ask for "email" or "emails" ONLY, generate ONLY email addresses like "john.smith@company.com", "sarah.jones@techcorp.com"
-- If they ask for "names" ONLY, generate ONLY person names like "John Smith", "Sarah Jones" - NO emails, NO phones
-- If they ask for "names and emails" or "emails and names", generate MATCHING pairs where names and emails correspond (John Smith → john.smith@domain.com)
-- IMPORTANT: For name+email requests, ensure email matches the name structure
-- Make content natural and professional
-- Don't use artificial patterns like "AI Generated" or "example.com"
-- For emails, use realistic domains like .com, .org, .io, .co
+CRITICAL: You must respond ONLY with a JSON object. No explanations, no context, no additional text.
 
-RESPONSE FORMAT:
-Return JSON object with field indices as keys:
-{"0": "content for field 0", "1": "content for field 1"}
+Examples of CORRECT responses:
+{"0": "John Smith", "1": "Sarah Wilson"}
+{"0": "john@email.com", "1": "sarah@company.org"}
+{"0": "+1-555-0123", "1": "+1-555-0456"}
 
-Generate content for all fields that should be updated.`;
+Rules:
+- Names request = person names only
+- Email request = email addresses only
+- Phone request = phone numbers only
+- Response must be valid JSON object with field indices as keys
+- NO explanations, NO additional text
 
-  const response = await llmClient(prompt);
+JSON object:`;
 
-  // Parse LLM response - handle array return type
+  const response = await llmTextClient(prompt);
+
   let contentMap: Record<string, string> = {};
-  if (Array.isArray(response) && response.length > 0) {
-    // Convert array to indexed object
-    contentMap = {};
-    response.forEach((item, index) => {
-      contentMap[index.toString()] = String(item);
-    });
-  } else {
-    // Fallback to default content
+
+  try {
+    const parsedResponse = parseJsonFromLLMResponse(response);
+
+    if (Array.isArray(parsedResponse)) {
+      parsedResponse.forEach((item, index) => {
+        contentMap[index.toString()] = String(item).trim();
+      });
+    } else if (typeof parsedResponse === 'object' && parsedResponse !== null) {
+      Object.keys(parsedResponse).forEach(key => {
+        contentMap[key] = String(parsedResponse[key]).trim();
+      });
+    }
+  } catch (error) {
+    const quotedContent = response.match(/"([^"]+)"/g);
+    if (quotedContent && quotedContent.length > 0) {
+      quotedContent.forEach((match, index) => {
+        contentMap[index.toString()] = match.replace(/"/g, '').trim();
+      });
+    }
+  }
+
+  if (Object.keys(contentMap).length === 0) {
     textNodes.forEach((_, index) => {
       contentMap[index.toString()] = `Generated Content ${index + 1}`;
     });
   }
 
-  // Apply content to text nodes
   let updatedCount = 0;
-  const font = await getAvailableFont(textNodes);
+  const font = await getAvailableFont(textNodes, figmaContext);
 
   for (const [indexStr, content] of Object.entries(contentMap)) {
     const index = parseInt(indexStr);
@@ -435,12 +422,11 @@ Generate content for all fields that should be updated.`;
         textNode.characters = String(content);
         updatedCount++;
       } catch (error) {
-        console.error(`[MergedContentFiller] Error updating node ${index}:`, error);
+        console.error(`[ContentFiller] Error updating node ${index}:`, error);
       }
     }
   }
 
-  // Select updated nodes and notify
   if (updatedCount > 0) {
     figma.currentPage.selection = textNodes;
     figma.notify(`✅ Updated ${updatedCount} text fields`, { timeout: 2000 });
@@ -452,11 +438,7 @@ Generate content for all fields that should be updated.`;
   };
 }
 
-/**
- * Create new content (enhanced with figmaContext)
- */
 async function createNewContent(userPrompt: string, frameDetails: any, isAddRequest: boolean, figmaContext?: any): Promise<AgentResponse> {
-  // Enhanced context information from figmaContext
   let contextInfo = "";
   if (figmaContext) {
     if (figmaContext.textAnalysis) {
@@ -470,39 +452,101 @@ async function createNewContent(userPrompt: string, frameDetails: any, isAddRequ
     }
   }
 
-  // Generate content using LLM with enhanced context
-  const prompt = `Generate content based on user request with rich context awareness.
+  const prompt = `USER REQUEST: "${userPrompt}"
 
-USER REQUEST: "${userPrompt}"
+CRITICAL: You must respond ONLY with a JSON array. No explanations, no context, no additional text.
 
-CONTEXT:
-- Existing text nodes: ${frameDetails.textNodes.length}
-- Selected containers: ${frameDetails.containers.length}
-- Mode: ${isAddRequest ? 'Add to existing' : 'Create new'}${contextInfo}
+MIXED DATA STRATEGY - Create separate nodes for different data types:
 
-INSTRUCTIONS:
-- Consider the layout analysis and text context for better content generation
-- Generate content that fits the existing design patterns and constraints
-- If they ask for "email" or "emails" ONLY, generate ONLY email addresses
-- If they ask for "names" ONLY, generate ONLY person names - NO emails, NO phones  
-- If they ask for "names and emails", generate MATCHING pairs
-- If they ask for "phone numbers", generate phone numbers like "+1-555-0123"
-- Make content natural and professional
-- Use realistic domains like .com, .org, .io, .co for emails
+Examples for MIXED requests:
+Request: "5 names and emails" → ["John Smith", "Sarah Wilson", "Mike Davis", "john.smith@email.com", "sarah.wilson@company.org", "mike.davis@startup.io"]
+Request: "names emails phone" → ["John Smith", "Sarah Wilson", "john@email.com", "sarah@company.org", "+1-555-0123", "+1-555-0456"]
+Request: "person details" → ["John Smith", "john.smith@email.com", "+1-555-0123", "Software Engineer", "New York, NY"]
 
-RESPONSE FORMAT:
-Return JSON array of strings:
-["item1", "item2", "item3"]
+SINGLE DATA TYPE examples:
+["John Smith", "Sarah Wilson", "Mike Davis"] (names only)
+["john@email.com", "sarah@company.org", "mike@startup.io"] (emails only)
+["+1-555-0123", "+1-555-0456", "+1-555-0789"] (phones only)
 
-Generate ${userPrompt.toLowerCase().includes('more') ? '6-12' : userPrompt.toLowerCase().includes('many') ? '8-15' : userPrompt.toLowerCase().includes('lots') ? '10-20' : '5-10'} items that match the request exactly.`;
+GROUPING STRATEGY:
+- Mixed requests = group by type: [all names first, then all emails, then all phones, then all other details]
+- "respectively" = alternate in pairs: ["name1", "email1", "name2", "email2"]
+- Single type = just that type
 
-  const response = await llmClient(prompt);
+Rules:
+- Detect mixed requests: "names and emails", "person details", "contact info", "user data"
+- Group similar data together for easier node placement
+- Generate ${(() => {
+      const match = userPrompt.match(/(\d+)/);
+      const num = match ? parseInt(match[1]) : null;
+      const isRespectively = userPrompt.toLowerCase().includes('respectively');
+      const isMixed = /names?.*(and|&).*email|email.*(and|&).*name|person.*detail|contact.*info|user.*data|detail.*person/.test(userPrompt.toLowerCase());
 
-  // Parse LLM response - handle array return type
+      if (num && isRespectively) {
+        return (num * 2).toString();
+      } else if (num && isMixed) {
+        return (num * 3).toString();
+      } else if (num) {
+        return num.toString();
+      } else if (isMixed) {
+        return '15';
+      } else if (userPrompt.toLowerCase().includes('more')) {
+        return '8';
+      } else if (userPrompt.toLowerCase().includes('many')) {
+        return '10';
+      } else if (userPrompt.toLowerCase().includes('lots')) {
+        return '12';
+      } else {
+        return '6';
+      }
+    })()} items total
+- Response must be valid JSON array
+- NO explanations, NO additional text
+
+JSON array:`;
+
+  let response: string;
+  try {
+    response = await llmTextClient(prompt);
+  } catch (error) {
+    const errorMsg = `LLM request failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error("[ContentFiller]", errorMsg, error);
+    throw new Error(errorMsg);
+  }
+
   let contentItems: string[] = [];
-  if (Array.isArray(response)) {
-    contentItems = response.map(item => String(item));
-  } else {
+
+  try {
+    const parsedResponse = parseJsonFromLLMResponse(response);
+
+    if (Array.isArray(parsedResponse)) {
+      contentItems = parsedResponse.map(item => {
+        if (typeof item === 'string') {
+          return item.trim();
+        } else {
+          return String(item).trim();
+        }
+      });
+    } else {
+      contentItems = [String(parsedResponse).trim()];
+    }
+  } catch (error) {
+    const lines = response.split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('Based on') && !line.startsWith('Since'))
+      .filter(line => line.length > 2);
+
+    const quotedContent = response.match(/"([^"]+)"/g);
+    if (quotedContent && quotedContent.length > 0) {
+      contentItems = quotedContent.map(match => match.replace(/"/g, '').trim());
+    } else if (lines.length > 0) {
+      contentItems = lines;
+    } else {
+      contentItems = ["Generated Content 1", "Generated Content 2", "Generated Content 3"];
+    }
+  }
+
+  if (contentItems.length === 0) {
     contentItems = ["Generated Content 1", "Generated Content 2", "Generated Content 3"];
   }
 
@@ -510,22 +554,34 @@ Generate ${userPrompt.toLowerCase().includes('more') ? '6-12' : userPrompt.toLow
     throw new Error("No content generated by LLM");
   }
 
-  // Check if we have existing text nodes to work with
   const existingTextNodes = frameDetails.textNodes;
 
-  // Find best container for new nodes
   let container: BaseNode & ChildrenMixin = figma.currentPage;
   let startX = 100;
   let startY = 100;
 
-  // Priority 1: Use explicitly selected frame/container
-  if (frameDetails.containers.length > 0) {
-    container = frameDetails.containers[0] as BaseNode & ChildrenMixin;
-    startX = 20;
-    startY = 20;
+  const currentSelection = figma.currentPage.selection;
+
+  for (const node of currentSelection) {
+    if (node.type === "FRAME" && 'appendChild' in node) {
+      container = node as BaseNode & ChildrenMixin;
+      startX = 20;
+      startY = 20;
+      break;
+    }
   }
-  // Priority 2: Use parent frame of existing text nodes
-  else if (existingTextNodes.length > 0 && isAddRequest) {
+
+  if (container === figma.currentPage && frameDetails.containers.length > 0) {
+    const selectedContainer = frameDetails.containers[0];
+
+    if ('appendChild' in selectedContainer && typeof selectedContainer.appendChild === 'function') {
+      container = selectedContainer as BaseNode & ChildrenMixin;
+      startX = 20;
+      startY = 20;
+    }
+  }
+
+  if (container === figma.currentPage && existingTextNodes.length > 0 && isAddRequest) {
     const firstTextNode = existingTextNodes[0];
     let parentFrame = firstTextNode.parent;
 
@@ -533,15 +589,16 @@ Generate ${userPrompt.toLowerCase().includes('more') ? '6-12' : userPrompt.toLow
       parentFrame = parentFrame.parent;
     }
 
-    if (parentFrame && 'children' in parentFrame) {
+    if (parentFrame && 'appendChild' in parentFrame && typeof parentFrame.appendChild === 'function') {
       container = parentFrame as BaseNode & ChildrenMixin;
       startX = 20;
       startY = 20;
     }
   }
 
-  // Apply content to existing nodes first
   let processedCount = 0;
+  let errorCount = 0;
+  const errors: string[] = [];
   const font = await getAvailableFont(frameDetails.selectedNodes);
 
   for (let i = 0; i < Math.min(contentItems.length, existingTextNodes.length); i++) {
@@ -554,55 +611,110 @@ Generate ${userPrompt.toLowerCase().includes('more') ? '6-12' : userPrompt.toLow
       textNode.characters = content;
       processedCount++;
     } catch (error) {
-      console.error(`[MergedContentFiller] Error updating existing node:`, error);
+      const errorMsg = `Failed to update existing node: "${content.substring(0, 20)}..."`;
+      errors.push(errorMsg);
+      errorCount++;
     }
   }
 
-  // Create new nodes for remaining content
   const remainingContent = contentItems.slice(existingTextNodes.length);
   let createdCount = 0;
 
-  for (let i = 0; i < remainingContent.length; i++) {
-    const content = remainingContent[i];
+  const dataTypes = {
+    names: [] as { content: string, index: number }[],
+    emails: [] as { content: string, index: number }[],
+    phones: [] as { content: string, index: number }[],
+    other: [] as { content: string, index: number }[]
+  };
 
-    try {
-      const textNode = figma.createText();
-      await figma.loadFontAsync(font);
+  remainingContent.forEach((content, index) => {
+    const item = { content, index };
 
-      textNode.fontName = font;
-      textNode.characters = content;
-      textNode.fontSize = 16;
-      textNode.name = generateSmartNodeName(content, userPrompt, i);
-
-      // Position the node
-      textNode.x = startX;
-      textNode.y = startY + (i * 35);
-
-      // Add to container
-      if (container !== figma.currentPage) {
-        container.appendChild(textNode);
-      }
-
-      createdCount++;
-    } catch (error) {
-      console.error(`[MergedContentFiller] Error creating new node:`, error);
+    if (content.includes('@') && content.includes('.')) {
+      dataTypes.emails.push(item);
+    } else if (content.match(/^\+?[\d\s\-\(\)\.]+$/) && content.length > 7) {
+      dataTypes.phones.push(item);
+    } else if (content.split(' ').length >= 2 && content.split(' ').length <= 4 &&
+      content.charAt(0).toUpperCase() === content.charAt(0)) {
+      dataTypes.names.push(item);
+    } else {
+      dataTypes.other.push(item);
     }
+  });
+
+  const columnWidth = 200;
+  const rowHeight = 35;
+  let currentColumn = 0;
+
+  const createNodesForType = async (items: typeof dataTypes.names, typeName: string, column: number) => {
+    for (let i = 0; i < items.length; i++) {
+      const { content } = items[i];
+
+      try {
+        const textNode = figma.createText();
+        await figma.loadFontAsync(font);
+
+        textNode.fontName = font;
+        textNode.characters = content;
+        textNode.fontSize = 16;
+        textNode.name = generateSmartNodeName(content, userPrompt, items[i].index);
+
+        textNode.x = startX + (column * columnWidth);
+        textNode.y = startY + (i * rowHeight);
+
+        if (container !== figma.currentPage) {
+          try {
+            container.appendChild(textNode);
+          } catch (appendError) {
+            const errorMsg = `Failed to append ${typeName} node to container`;
+            errors.push(errorMsg);
+            errorCount++;
+          }
+        }
+
+        createdCount++;
+      } catch (error) {
+        const errorMsg = `Failed to create ${typeName} node: "${content.substring(0, 20)}..."`;
+        errors.push(errorMsg);
+        errorCount++;
+      }
+    }
+  };
+
+  if (dataTypes.names.length > 0) {
+    await createNodesForType(dataTypes.names, "name", currentColumn++);
+  }
+  if (dataTypes.emails.length > 0) {
+    await createNodesForType(dataTypes.emails, "email", currentColumn++);
+  }
+  if (dataTypes.phones.length > 0) {
+    await createNodesForType(dataTypes.phones, "phone", currentColumn++);
+  }
+  if (dataTypes.other.length > 0) {
+    await createNodesForType(dataTypes.other, "other", currentColumn++);
   }
 
   const totalCount = processedCount + createdCount;
-  if (totalCount > 0) {
+
+  if (errorCount === 0 && totalCount > 0) {
     figma.notify(`✅ Generated ${totalCount} content items`, { timeout: 2000 });
+  } else if (totalCount > 0 && errorCount > 0) {
+    figma.notify(`⚠️ Generated ${totalCount} items, ${errorCount} errors`, { timeout: 3000 });
+  } else if (totalCount === 0 && errorCount > 0) {
+    figma.notify(`❌ Failed to generate content`, { timeout: 4000 });
+  } else {
+    figma.notify(`ℹ️ No content generated`, { timeout: 2000 });
   }
 
   return {
     success: totalCount > 0,
-    message: `Generated ${totalCount} content items (${processedCount} updated, ${createdCount} created)`
+    message: errorCount > 0
+      ? `Generated ${totalCount} content items with ${errorCount} errors: ${errors.join(', ')}`
+      : `Generated ${totalCount} content items (${processedCount} updated, ${createdCount} created)`,
+    error: errors.length > 0 ? errors.join('; ') : undefined
   };
 }
 
-/**
- * Generate smart node names based on content and request
- */
 function generateSmartNodeName(content: string, userPrompt: string, index: number): string {
   const prompt = userPrompt.toLowerCase();
 
@@ -618,5 +730,3 @@ function generateSmartNodeName(content: string, userPrompt: string, index: numbe
     return `Content ${index + 1}`;
   }
 }
-
-
