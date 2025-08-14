@@ -170,8 +170,8 @@ Examples:
         const fallbackResult = tryFallbackParsing(content);
         if (fallbackResult.length > 0) {
           console.log("[LLM] Fallback parse successful:", fallbackResult);
-          return fallbackResult;
-        }
+            return fallbackResult;
+          }
 
         throw parseError;
       }
@@ -280,4 +280,93 @@ function parseManually(content: string): any | null {
   }
 
   return null;
+}
+
+// Simple LLM client for direct text responses (not JSON)
+export async function llmTextClient(userPrompt: string): Promise<string> {
+  console.log("[LLM-Text] Prompt to Groq:", userPrompt);
+
+  const maxRetries = 3;
+  let attempt = 0;
+
+  while (attempt < maxRetries) {
+    try {
+      console.log("[LLM-Text] Sending request to Groq...");
+
+      const requestBody = {
+        model: "llama-3.1-8b-instant",
+        messages: [
+          {
+            role: "user",
+            content: userPrompt,
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 150,
+        top_p: 1,
+        stream: false,
+      };
+
+      const response = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      console.log("[LLM-Text] Response status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[LLM-Text] API Error:", errorText);
+
+        if (response.status === 429 && attempt < maxRetries - 1) {
+          const retryAfter = response.headers.get("retry-after");
+          const delayMs = retryAfter
+            ? parseInt(retryAfter) * 1000
+            : Math.pow(2, attempt) * 1000;
+          console.warn(`[LLM-Text] Rate limit. Retrying in ${delayMs}ms...`);
+          await delay(delayMs);
+          attempt++;
+          continue;
+        }
+
+        throw new Error(`Groq API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log("[LLM-Text] Raw response:", data);
+
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error("Invalid response structure from Groq API");
+      }
+
+      let content = data.choices[0].message.content;
+      if (!content) {
+        throw new Error("Empty content from Groq API");
+      }
+
+      content = content.trim();
+      console.log("[LLM-Text] Final content:", content);
+
+      return content;
+    } catch (error) {
+      console.error(`[LLM-Text] Attempt ${attempt + 1} failed:`, error);
+
+      if (attempt === maxRetries - 1) {
+        console.error("[LLM-Text] All attempts failed, returning empty string");
+        return "";
+      }
+
+      await delay(1000 * (attempt + 1));
+      attempt++;
+    }
+  }
+
+  return "";
 }
