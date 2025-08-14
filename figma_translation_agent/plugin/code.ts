@@ -204,12 +204,12 @@ function createOrchestratorContext(prompt: string, selectionDetails: any[]) {
     textAnalysis: {
       totalTextNodes: textNodes.length,
       totalCharacters: textNodes.reduce(
-        (sum, node) => sum + (node.textLength || 0),
+        (sum: number, node: any) => sum + (node.textLength || 0),
         0
       ),
-      languages: textNodes.map((node) => node.text).filter(Boolean),
+      languages: textNodes.map((node: any) => node.text).filter(Boolean),
       emptyTextFields: textNodes.filter(
-        (node) => !node.text || node.text.trim() === ""
+        (node: any) => !node.text || node.text.trim() === ""
       ).length,
     },
 
@@ -217,9 +217,9 @@ function createOrchestratorContext(prompt: string, selectionDetails: any[]) {
     layoutAnalysis: {
       totalFrames: frames.length,
       layoutModes: [
-        ...new Set(frames.map((f) => f.layoutMode).filter(Boolean)),
+        ...new Set(frames.map((f: any) => f.layoutMode).filter(Boolean)),
       ],
-      frameHierarchy: frames.map((f) => ({
+      frameHierarchy: frames.map((f: any) => ({
         id: f.id,
         name: f.name,
         childrenCount: f.childrenCount,

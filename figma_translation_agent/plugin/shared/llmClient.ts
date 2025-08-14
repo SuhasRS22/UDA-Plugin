@@ -5,7 +5,6 @@ const GROQ_API_KEY =
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
 export async function llmClient(userPrompt: string): Promise<any[]> {
   console.log("[LLM] Prompt to Groq:", userPrompt);
 
@@ -29,7 +28,9 @@ LOREM/CONTENTFILLER AGENT - Use when user wants to:
 - Add names: "add name", "add title", "add heading"
 - Fill empty fields: "fill form", "add dummy data", "populate content"
 - Add sample content: "lorem ipsum", "fake content", "test data"
-- anything with adding text to the existing things 
+- Replace/edit text: "change X to Y", "replace text", "update content"
+- Text modifications: "change are you to am i", "replace hello with hi"
+- anything with adding or updating the text to the existing things 
 
 TRANSLATE AGENT - Use when user mentions:
 - Language changes: "translate to spanish", "convert to french"
@@ -51,33 +52,30 @@ TRANSLATE:
 - frameAction: "update"
 
 LOREM/CONTENTFILLER:
-- type: "realistic" (names, titles), "lorem" (lorem ipsum), "form" (form fields)
+- type: "realistic" (names, titles), "lorem" (lorem ipsum), "form" (form fields), "replace" (text replacement)
+- content: specific text to add or replacement instructions
 - frameAction: "update"
 
 CONTRASTCHECKER:
 - mode: "check", "fix", "suggest"
 - standard: "AA", "AAA"
 
-RESPONSE FORMAT: JSON array only, no markdown, no explanation.
 
+RULES:
+1. Return ONLY valid JSON array
+2. No explanations or examples
+3. Parse the user's exact request
+
+IMPORTANT: Return ONLY a valid JSON array. No explanations, no markdown, no extra text.
+
+
+FORMAT:
+[{"agent":"agentName","params":{...}}]
 Examples:
-User: "resize to 800x600"
 [{"agent":"resize","params":{"width":800,"height":600,"frameAction":"new"}}]
-
-User: "add name"
 [{"agent":"lorem","params":{"type":"realistic","frameAction":"update"}}]
-
-User: "fill with content"
-[{"agent":"lorem","params":{"type":"lorem","frameAction":"update"}}]
-
-User: "add title and description"
-[{"agent":"lorem","params":{"type":"realistic","frameAction":"update"}}]
-
-User: "translate to spanish"
-[{"agent":"translate","params":{"language":"spanish","frameAction":"update"}}]
-
-User: "resize to mobile and add content"
-[{"agent":"resize","params":{"width":375,"height":812,"frameAction":"new"}},{"agent":"lorem","params":{"type":"lorem","frameAction":"update"}}]`;
+[{"agent":"lorem","params":{"type":"replace","prompt":"change are you to am i","frameAction":"update"}}]
+[{"agent":"translate","params":{"language":"spanish","frameAction":"update"}}]`;
 
   const maxRetries = 3;
   let attempt = 0;
@@ -99,12 +97,10 @@ User: "resize to mobile and add content"
           },
         ],
         temperature: 0.1,
-        max_tokens: 1000,
+        max_tokens: 500,
         top_p: 1,
         stream: false,
       };
-
-      console.log("[LLM] Request body:", JSON.stringify(requestBody, null, 2));
 
       const response = await fetch(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -117,8 +113,6 @@ User: "resize to mobile and add content"
           body: JSON.stringify(requestBody),
         }
       );
-
-      console.log("[LLM] Response status:", response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -153,19 +147,8 @@ User: "resize to mobile and add content"
       content = content.trim();
       console.log("[LLM] Raw content:", content);
 
-      // Clean up the response
-      if (content.includes("```json")) {
-        content = content.replace(/```json\s*/g, "").replace(/```\s*/g, "");
-      }
-      if (content.includes("```")) {
-        content = content.replace(/```\s*/g, "");
-      }
-
-      // Remove any text before the JSON array
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        content = jsonMatch[0];
-      }
+      // Enhanced JSON cleaning
+      content = cleanAndExtractJSON(content);
 
       console.log("[LLM] Cleaned content:", content);
 
@@ -183,18 +166,11 @@ User: "resize to mobile and add content"
         console.error("[LLM] JSON parse error:", parseError);
         console.error("[LLM] Content that failed to parse:", content);
 
-        // Fallback: try to extract valid JSON
-        try {
-          const fallbackMatch = content.match(/\{[^}]+\}/g);
-          if (fallbackMatch) {
-            const fallbackResult = fallbackMatch.map((match) =>
-              JSON.parse(match)
-            );
-            console.log("[LLM] Fallback parse successful:", fallbackResult);
-            return fallbackResult;
-          }
-        } catch (fallbackError) {
-          console.error("[LLM] Fallback parse also failed:", fallbackError);
+        // Enhanced fallback parsing
+        const fallbackResult = tryFallbackParsing(content);
+        if (fallbackResult.length > 0) {
+          console.log("[LLM] Fallback parse successful:", fallbackResult);
+          return fallbackResult;
         }
 
         throw parseError;
@@ -213,4 +189,95 @@ User: "resize to mobile and add content"
   }
 
   return [];
+}
+
+// Enhanced JSON cleaning function
+function cleanAndExtractJSON(content: string): string {
+  // Remove markdown code blocks
+  content = content.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+
+  // Remove any leading/trailing text outside of JSON
+  content = content.replace(/^[^[\{]*/, "").replace(/[^\}\]]*$/, "");
+
+  // Find the JSON array or object - replace /s flag with [\s\S]*
+  const arrayMatch = content.match(/\[[\s\S]*?\]/);
+  if (arrayMatch) {
+    return arrayMatch[0];
+  }
+
+  const objectMatch = content.match(/\{[\s\S]*?\}/);
+  if (objectMatch) {
+    return `[${objectMatch[0]}]`; // Wrap single object in array
+  }
+
+  return content;
+}
+
+// Enhanced fallback parsing function
+function tryFallbackParsing(content: string): any[] {
+  const results: any[] = [];
+
+  try {
+    // Try to find individual JSON objects
+    const objectMatches = content.match(/\{[^}]*\}/g);
+    if (objectMatches) {
+      for (const match of objectMatches) {
+        try {
+          const parsed = JSON.parse(match);
+          if (parsed.agent && parsed.params) {
+            results.push(parsed);
+          }
+        } catch (e) {
+          console.warn("[LLM] Skipping invalid object:", match);
+        }
+      }
+    }
+
+    // Try to manually construct from common patterns
+    if (results.length === 0) {
+      const manualResult = parseManually(content);
+      if (manualResult) {
+        results.push(manualResult);
+      }
+    }
+  } catch (error) {
+    console.error("[LLM] Fallback parsing failed:", error);
+  }
+
+  return results;
+}
+
+// Manual parsing for common patterns
+function parseManually(content: string): any | null {
+  try {
+    // Look for agent and params patterns
+    const agentMatch = content.match(/agent["']?\s*:\s*["']?(\w+)["']?/);
+    const paramsMatch = content.match(/params["']?\s*:\s*({[^}]+})/);
+
+    if (agentMatch && paramsMatch) {
+      const agent = agentMatch[1];
+      const paramsStr = paramsMatch[1];
+
+      try {
+        const params = JSON.parse(paramsStr);
+        return { agent, params };
+      } catch (e) {
+        // Try to fix common JSON issues in params
+        const fixedParams = paramsStr
+          .replace(/(\w+):/g, '"$1":') // Add quotes to keys
+          .replace(/:\s*(\w+)(?=[,}])/g, ':"$1"'); // Add quotes to string values
+
+        try {
+          const params = JSON.parse(fixedParams);
+          return { agent, params };
+        } catch (e2) {
+          console.warn("[LLM] Could not fix params JSON");
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[LLM] Manual parsing failed:", error);
+  }
+
+  return null;
 }
