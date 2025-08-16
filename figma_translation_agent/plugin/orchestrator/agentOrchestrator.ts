@@ -1,15 +1,8 @@
 // agentOrchestrator.ts
 import { llmClient } from "../shared/llmClient";
 import { runLoremIpsumAgent } from "../agents/contentFillerAgent";
-import { 
-  resizeFromPrompt, 
-  simpleResize, 
-  resizeFrameWithText,
-  smartResizeWithTextFitting,
-  resizeToMobile, 
-  resizeToTablet, 
-  resizeToDesktop 
-} from "../agents/resizeAgent";
+import { runResizeAgent } from "../agents/resizeAgent";
+// import translateAgent from "../agents/translationAgent";
 import { AgentResponse } from "../utils/types";
 // import { runContrastCheckerAgent } from "../agents/contrastAgent";
 
@@ -46,18 +39,19 @@ const agentRegistry: Record<
 export async function agentOrchestrator(
   combinedPrompt: any
 ): Promise<AgentResponse[]> {
-  console.log("[Orchestrator] Starting with prompt:", combinedPrompt);
+  // LLM decides the plan — sequence & parameters
+  const userPrompt = combinedPrompt.userPrompt;
+  console.log("[Orchestrator] Prompt:", userPrompt);
 
-  try {
-    // Extract user prompt
-    const userPrompt = typeof combinedPrompt === "string" ? combinedPrompt : combinedPrompt?.userRequest || combinedPrompt;
-    console.log("[Orchestrator] User prompt:", userPrompt);
+  // Send only userPrompt string to LLM
+  const tasks = await llmClient(userPrompt);
+  console.log("[Orchestrator] Task plan:", tasks);
 
-    // Get tasks from LLM
-    const tasks = await llmClient(userPrompt);
-    console.log("[Orchestrator] Task plan:", tasks);
-
-    const results: AgentResponse[] = [];
+  const results: AgentResponse[] = [];
+  let context: Record<string, any> = {
+    figmaContext: combinedPrompt,
+    frameId: null,
+  };
 
   for (const task of tasks) {
     const { agent = "lorem", params } = task;
@@ -78,20 +72,13 @@ export async function agentOrchestrator(
         context = { ...context, ...result.data };
       }
 
-        results.push(result);
-        console.log(`[Orchestrator] Agent "${agent}" completed:`, result);
-
-      } catch (err) {
-        console.error(`[Orchestrator] Error in agent "${agent}":`, err);
-        results.push({ success: false, message: `Error in ${agent}: ${String(err)}` });
-      }
+      results.push(result);
+    } catch (err) {
+      console.error(`[Orchestrator] Error in agent "${agent}":`, err);
+      results.push({ success: false, message: String(err) });
     }
-
-    console.log("[Orchestrator] All tasks completed:", results);
-    return results;
-
-  } catch (error) {
-    console.error("[Orchestrator] Critical error:", error);
-    return [{ success: false, message: `Orchestrator failed: ${String(error)}` }];
   }
+
+  console.log("[Orchestrator] Completed:", results);
+  return results;
 }

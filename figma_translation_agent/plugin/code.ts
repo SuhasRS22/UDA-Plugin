@@ -1,7 +1,6 @@
 /// <reference types="@figma/plugin-typings" />
 
 import { agentOrchestrator } from "../plugin/orchestrator/agentOrchestrator";
-import { resizeFromPrompt, testSmartResize, simpleResize } from "./agents/resizeAgent";
 
 figma.showUI(__html__, { width: 400, height: 600 });
 
@@ -304,12 +303,5 @@ figma.ui.onmessage = async (msg) => {
         error: String(error),
       });
     }
-  }
-
-  // Add test message handler
-  if (msg.type === "test-resize") {
-    console.log("[Plugin] Testing smart resize function...");
-    await testSmartResize();
-    return;
   }
 };

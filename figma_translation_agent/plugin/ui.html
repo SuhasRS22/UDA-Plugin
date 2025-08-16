@@ -318,7 +318,6 @@
           rows="3"
         ></textarea>
         <button class="generate-btn" id="generate-btn">Generate</button>
-        <button class="generate-btn" id="test-resize-btn" style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); margin-top: 8px;">🧪 Test Resize (400x300)</button>
         <div class="process-log">
           <div class="process-log-title" id="log-toggle">
             &#9660; Process Log
@@ -335,7 +334,6 @@
     <script>
       const generateBtn = document.getElementById("generate-btn");
       const promptInput = document.getElementById("prompt-input");
-      const testResizeBtn = document.getElementById("test-resize-btn");
       const logList = document.getElementById("process-log-list");
       const logToggle = document.getElementById("log-toggle");
       const headerTitle = document.querySelector(".header-title");
@@ -359,23 +357,6 @@
             pluginMessage: {
               type: "run-prompt",
               prompt: prompt,
-            },
-          },
-          "*"
-        );
-      };
-
-      // Test resize button handler
-      testResizeBtn.onclick = function () {
-        testResizeBtn.disabled = true;
-        testResizeBtn.textContent = "Testing...";
-        
-        addLogItem("🧪 Testing resize function...", "processing");
-        
-        parent.postMessage(
-          {
-            pluginMessage: {
-              type: "test-resize",
             },
           },
           "*"
@@ -411,14 +392,6 @@
         } else if (msg.type === "selection-error") {
           addLogItem(msg.message, "error");
           resetButton("Select nodes & try again");
-        } else if (msg.type === "resize-complete") {
-          if (msg.result.success) {
-            addLogItem("✅ " + msg.result.message, "done");
-          } else {
-            addLogItem("❌ " + msg.result.message, "error");
-          }
-          resetButton();
-          resetTestButton();
         }
       };
 
@@ -436,11 +409,6 @@
       function resetButton(text = "Generate") {
         generateBtn.disabled = false;
         generateBtn.textContent = text;
-      }
-
-      function resetTestButton() {
-        testResizeBtn.disabled = false;
-        testResizeBtn.textContent = "🧪 Test Resize (400x300)";
       }
 
       // Enable Enter key to submit
