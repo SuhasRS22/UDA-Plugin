@@ -3,7 +3,7 @@ export interface NodeSnapshot {
   id: string; // required (orchestrator uses this to rebuild context)
   type: string; // e.g., "TEXT", "FRAME", "RECTANGLE", "INSTANCE"
   name?: string;
-
+ 
   // geometry / layout
   x?: number;
   y?: number;
@@ -11,7 +11,7 @@ export interface NodeSnapshot {
   height?: number;
   rotation?: number;
   parentId?: string;
-
+ 
   // text fields (for translate/content filler)
   characters?: string;
   fontSize?: number;
@@ -21,31 +21,29 @@ export interface NodeSnapshot {
   textAlignVertical?: string;
   letterSpacing?: number;
   lineHeight?: number;
-
+ 
   // any agent-specific metadata you want to attach
   [key: string]: any;
 }
-
+ 
 /** What each agent must return. This aligns with agentOrchestrator.ts usage. */
 export interface AgentResponse {
   success: boolean;
   message: string;
   error?: string;
-
   /** Optional agent identification for UI display purposes */
   agentType?: string;
   agentName?: string;
   response?: string; // Additional response content for display
-
   /** Modified nodes (can be many, e.g., multiple text children in a frame). */
   updatedNodes?: NodeSnapshot[];
-
+ 
   /** Newly created nodes/frames (can be many). */
   createdNodes?: NodeSnapshot[];
-
+ 
   /** Deleted nodes by ID. */
   deletedNodeIds?: string[];
-
+ 
   /**
    * Optional snapshot of the scene/context after this agent ran.
    * The orchestrator will often rebuild this via buildFigmaContext(),
@@ -53,7 +51,7 @@ export interface AgentResponse {
    */
   frameData?: FigmaContext;
 }
-
+ 
 /** Single task returned by the task planner (llmClient). */
 export interface AgentTask {
   agent:
@@ -65,7 +63,7 @@ export interface AgentTask {
     | string;
   params: Record<string, any>;
 }
-
+ 
 /** High-level counts & flags (optional, used by some agents/LLM prompt). */
 export interface FigmaSummary {
   totalNodes?: number;
@@ -76,7 +74,7 @@ export interface FigmaSummary {
   hasShapes?: boolean;
   lastOperation?: string;
 }
-
+ 
 /** Optional text analysis info. */
 export interface FigmaTextAnalysis {
   totalTextNodes?: number;
@@ -84,7 +82,7 @@ export interface FigmaTextAnalysis {
   languages?: string[];
   emptyTextFields?: number;
 }
-
+ 
 /** Optional layout analysis info. */
 export interface FigmaLayoutAnalysis {
   totalFrames?: number;
@@ -96,7 +94,7 @@ export interface FigmaLayoutAnalysis {
     layoutMode?: string;
   }>;
 }
-
+ 
 /**
  * Flexible context shape that supports both your older `nodes.*`-based agents
  * and any convenience subsets your builder provides.
@@ -112,31 +110,31 @@ export interface FigmaContext {
     byType?: Record<string, NodeSnapshot[]>;
     [key: string]: any;
   };
-
+ 
   /** Optional summaries/analyses used in prompts or UI */
   summary?: FigmaSummary;
   textAnalysis?: FigmaTextAnalysis;
   layoutAnalysis?: FigmaLayoutAnalysis;
-
+ 
   /** Convenience subsets (if your buildFigmaContext returns them) */
   allNodes?: Record<string, NodeSnapshot>;
   textNodes?: NodeSnapshot[];
   resizableNodes?: NodeSnapshot[];
   contrastCheckNodes?: NodeSnapshot[];
-
+ 
   /** Optional stringified context for LLM prompts */
   figmaContextString?: string;
-
+ 
   /** Anything else you decide to stash */
   [key: string]: any;
 }
-
+ 
 export interface TranslationRequest {
   text: string;
   targetLanguage: string;
   sourceLanguage?: string;
 }
-
+ 
 export interface TranslationResponse {
   translatedText: string;
   confidence: number;
