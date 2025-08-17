@@ -243,6 +243,14 @@ function createOrchestratorContext(prompt: string, selectionDetails: any[]) {
 }
 
 figma.ui.onmessage = async (msg) => {
+  if (msg.type === "resize") {
+    // Handle UI resize requests
+    const { width, height } = msg;
+    figma.ui.resize(width, height);
+    console.log(`[Plugin] Resized UI to ${width}x${height}`);
+    return;
+  }
+
   if (msg.type === "run-prompt") {
     const { prompt } = msg;
 

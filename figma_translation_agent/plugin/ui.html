@@ -16,19 +16,20 @@
 
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Oxygen, Ubuntu, Cantarell, sans-serif;
+          Oxygen, Cantarell, sans-serif;
         background: linear-gradient(135deg, #232526 0%, #414345 100%);
         color: #e2e8f0;
         font-size: 14px;
         line-height: 1.5;
-        height: 100vh;
-        overflow: hidden;
+        min-height: 100vh;
+        overflow-x: hidden;
+        overflow-y: auto;
       }
 
       .container {
         display: flex;
         flex-direction: column;
-        height: 100vh;
+        min-height: 100vh;
         max-width: 400px;
         margin: 0 auto;
       }
@@ -74,6 +75,7 @@
         font-weight: bold;
         cursor: pointer;
         transition: all 0.2s ease;
+        position: relative;
       }
 
       .header-info:hover {
@@ -299,18 +301,232 @@
           transform: rotate(360deg);
         }
       }
+
+      /* Agent Output Field Styles */
+      .agent-output {
+        display: none;
+        background: rgba(45, 55, 72, 0.3);
+        border: 1px solid rgba(67, 67, 67, 0.3);
+        border-radius: 8px;
+        margin-bottom: 16px;
+        overflow: hidden;
+        animation: slideDown 0.3s ease-out;
+      }
+
+      .agent-output.show {
+        display: block;
+      }
+
+      .output-header {
+        background: rgba(45, 55, 72, 0.5);
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(67, 67, 67, 0.3);
+      }
+
+      .output-title {
+        color: #f8fafc;
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .output-close {
+        color: #94a3b8;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: color 0.2s ease;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .output-close:hover {
+        color: #f8fafc;
+        background: rgba(67, 67, 67, 0.3);
+      }
+
+      .output-content {
+        padding: 16px;
+        color: #cbd5e0;
+        font-size: 14px;
+        line-height: 1.6;
+        max-height: 250px;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+
+      .output-content h4 {
+        color: #f8fafc;
+        margin: 0 0 8px 0;
+        font-size: 16px;
+      }
+
+      .output-content p {
+        margin: 0 0 12px 0;
+      }
+
+      .output-content ul {
+        margin: 8px 0;
+        padding-left: 20px;
+      }
+
+      .output-content li {
+        margin: 4px 0;
+      }
+
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Modal Styles */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(5px);
+      }
+
+      .modal-content {
+        background: linear-gradient(135deg, #232526 0%, #414345 100%);
+        margin: 5% auto;
+        padding: 0;
+        border: 1px solid #2d3748;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 500px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      }
+
+      .modal-header {
+        background: rgba(36, 39, 46, 0.95);
+        padding: 20px;
+        border-bottom: 1px solid #2d3748;
+        border-radius: 12px 12px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .modal-header h3 {
+        color: #f8fafc;
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+      }
+
+      .modal-close {
+        color: #94a3b8;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: color 0.2s ease;
+      }
+
+      .modal-close:hover {
+        color: #f8fafc;
+      }
+
+      .modal-body {
+        padding: 20px;
+      }
+
+      .agent-item {
+        background: rgba(45, 55, 72, 0.3);
+        border: 1px solid rgba(67, 67, 67, 0.3);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        transition: all 0.2s ease;
+      }
+
+      .agent-item:hover {
+        background: rgba(45, 55, 72, 0.5);
+        border-color: rgba(67, 67, 67, 0.5);
+        transform: translateY(-1px);
+      }
+
+      .agent-item.inactive {
+        opacity: 0.7;
+        background: rgba(45, 55, 72, 0.2);
+      }
+
+      .agent-item.inactive:hover {
+        background: rgba(45, 55, 72, 0.3);
+      }
+
+      .agent-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .agent-item h4 {
+        color: #f8fafc;
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .agent-item p {
+        color: #cbd5e0;
+        font-size: 14px;
+        line-height: 1.5;
+        margin: 0;
+      }
+
+      .status-badge {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .status-badge.active {
+        background: rgba(34, 197, 94, 0.2);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+      }
+
+      .status-badge.inactive {
+        background: rgba(234, 179, 8, 0.2);
+        color: #facc15;
+        border: 1px solid rgba(234, 179, 8, 0.3);
+      }
     </style>
   </head>
   <body>
     <div class="container">
       <div class="header">
         <span class="header-title">Translation Agent</span>
-        <span class="header-info" title="AI-powered translation for Figma"
+        <span
+          class="header-info"
+          title="Click to see all available agents and their descriptions"
           >i</span
         >
       </div>
       <div class="main">
-        <div class="prompt-label">What can I help you with?</div>
+        <div class="prompt-label">
+          Your design assistant is ready - what’s the plan?
+        </div>
         <textarea
           id="prompt-input"
           class="prompt-input"
@@ -318,6 +534,18 @@
           rows="3"
         ></textarea>
         <button class="generate-btn" id="generate-btn">Generate</button>
+
+        <!-- Agent Response Output Field -->
+        <div class="agent-output" id="agent-output">
+          <div class="output-header">
+            <span class="output-title" id="output-title">Agent Response</span>
+            <span class="output-close" id="output-close">&times;</span>
+          </div>
+          <div class="output-content" id="output-content">
+            <!-- Agent responses will be displayed here -->
+          </div>
+        </div>
+
         <div class="process-log">
           <div class="process-log-title" id="log-toggle">
             &#9660; Process Log
@@ -331,12 +559,157 @@
         </div>
       </div>
     </div>
+
+    <!-- Agent Info Modal -->
+    <div class="modal" id="agent-info-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>
+            Available Agents
+            <span style="font-size: 14px; color: #94a3b8; font-weight: normal"
+              >(5 Active • 1 Coming Soon)</span
+            >
+          </h3>
+          <span class="modal-close" id="modal-close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="agent-item active">
+            <h4>
+              🎨 Content Filler Agent
+              <span class="status-badge active">Active</span>
+            </h4>
+            <p>
+              Generates Lorem Ipsum text and fills content into selected frames
+              and text elements. Perfect for prototyping and mockups.
+            </p>
+          </div>
+          <div class="agent-item active">
+            <h4>
+              📐 Resize Agent <span class="status-badge active">Active</span>
+            </h4>
+            <p>
+              Resizes frames to different device presets (mobile, tablet,
+              desktop) or custom dimensions. Can create new frames or modify
+              existing ones while preserving content proportions.
+            </p>
+          </div>
+          <div class="agent-item active">
+            <h4>
+              💬 Chat Agent <span class="status-badge active">Active</span>
+            </h4>
+            <p>
+              Your intelligent design assistant! Answers questions about your
+              designs, explains elements, and provides helpful information when
+              you need guidance.
+            </p>
+          </div>
+          <div class="agent-item inactive">
+            <h4>
+              🌍 Translation Agent
+              <span class="status-badge inactive">Coming Soon</span>
+            </h4>
+            <p>
+              Translates text content in your designs to different languages
+              while maintaining design integrity and layout consistency.
+            </p>
+          </div>
+          <div class="agent-item active">
+            <h4>
+              🎯 Contrast Checker Agent
+              <span class="status-badge active">Active</span>
+            </h4>
+            <p>
+              Analyzes color contrast ratios in your designs to ensure
+              accessibility compliance and WCAG standards.
+            </p>
+          </div>
+          <div class="agent-item active">
+            <h4>
+              🤖 AI Orchestrator <span class="status-badge active">Active</span>
+            </h4>
+            <p>
+              Coordinates all agents intelligently based on your requests.
+              Automatically determines which agents to use and in what order to
+              complete your design tasks.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script>
       const generateBtn = document.getElementById("generate-btn");
       const promptInput = document.getElementById("prompt-input");
       const logList = document.getElementById("process-log-list");
       const logToggle = document.getElementById("log-toggle");
       const headerTitle = document.querySelector(".header-title");
+
+      // Modal elements
+      const modal = document.getElementById("agent-info-modal");
+      const modalClose = document.getElementById("modal-close");
+      const headerInfo = document.querySelector(".header-info");
+
+      // Agent output elements
+      const agentOutput = document.getElementById("agent-output");
+      const outputTitle = document.getElementById("output-title");
+      const outputContent = document.getElementById("output-content");
+      const outputClose = document.getElementById("output-close");
+
+      // Modal event handlers
+      headerInfo.onclick = function () {
+        modal.style.display = "block";
+      };
+
+      modalClose.onclick = function () {
+        modal.style.display = "none";
+      };
+
+      window.onclick = function (event) {
+        if (event.target === modal) {
+          modal.style.display = "none";
+        }
+      };
+
+      // Agent output event handlers
+      outputClose.onclick = function () {
+        hideAgentOutput(); // This will trigger resize as well
+      };
+
+      // Function to display agent response
+      // Function to resize plugin window
+      function resizePlugin() {
+        const agentOutputVisible = agentOutput.classList.contains("show");
+        const baseHeight = 600; // Base plugin height
+        const expandedHeight = 900; // Height when agent output is visible
+
+        const newHeight = agentOutputVisible ? expandedHeight : baseHeight;
+
+        parent.postMessage(
+          {
+            pluginMessage: {
+              type: "resize",
+              width: 400,
+              height: newHeight,
+            },
+          },
+          "*"
+        );
+      }
+
+      function displayAgentResponse(agentName, response) {
+        outputTitle.textContent = `${agentName} Response`;
+        outputContent.innerHTML = response;
+        agentOutput.classList.add("show");
+        // Resize plugin to accommodate the output
+        setTimeout(resizePlugin, 100); // Small delay to ensure DOM is updated
+      }
+
+      // Function to hide agent output
+      function hideAgentOutput() {
+        agentOutput.classList.remove("show");
+        // Resize plugin back to normal size
+        setTimeout(resizePlugin, 100);
+      }
 
       generateBtn.onclick = function () {
         const prompt = promptInput.value.trim();
@@ -346,6 +719,9 @@
           resetButton();
           return;
         }
+
+        // Hide any previous agent output
+        hideAgentOutput();
 
         generateBtn.disabled = true;
         generateBtn.textContent = "Processing...";
@@ -378,9 +754,38 @@
           logList.innerHTML = "";
 
           if (msg.results && msg.results.length > 0) {
+            // Check if any result is from chat agent or contrast agent
+            let agentResponse = null;
+            let agentName = null;
+
             msg.results.forEach((result) => {
+              // Check if this is a chat agent response
+              if (
+                result.agentType === "chat" ||
+                result.agentName === "Chat Agent"
+              ) {
+                agentResponse = result.message || result.response;
+                agentName = "Chat Agent";
+              }
+              // Check if this is a contrast agent response
+              else if (
+                result.agentType === "contrast" ||
+                result.agentName === "Contrast Checker Agent"
+              ) {
+                agentResponse = result.message || result.response;
+                agentName = "Contrast Checker Agent";
+                // Don't add contrast agent messages to process log since they appear in output field
+                return;
+              }
+
+              // Add to process log for non-contrast agents
               addLogItem(result.message, result.success ? "done" : "error");
             });
+
+            // Display agent response if found
+            if (agentResponse && agentName) {
+              displayAgentResponse(agentName, agentResponse);
+            }
           } else {
             addLogItem("Process completed", "done");
           }
@@ -449,7 +854,6 @@
         "Content Filler Agent",
         "Contrast Agent",
         "Resize Agent",
-        "Mobile Optimizer",
       ];
       let titleIndex = 0;
 

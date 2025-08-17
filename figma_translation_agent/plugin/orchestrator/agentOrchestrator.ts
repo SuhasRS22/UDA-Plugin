@@ -2,8 +2,9 @@
 import { llmClient } from "../shared/llmClient";
 import { runLoremIpsumAgent } from "../agents/contentFillerAgent";
 import { runResizeAgent } from "../agents/resizeAgent";
+import { runChatAgent, shouldUseChatAgent } from "../agents/chatAgent";
 // import translateAgent from "../agents/translationAgent";
-// import { runContrastCheckerAgent } from "../agents/contrastAgent";
+import { runContrastCheckerAgent } from "../agents/contrastAgent";
 import { AgentResponse } from "../utils/types";
 import { buildFigmaContext } from "../shared/buildFigmaContext";
 import { runContrastCheckerAgent } from "../agents/contrastAgent";
@@ -18,6 +19,7 @@ const agentRegistry: Record<
   //   translateAgent(params, context),
   lorem: async (params, context) => runLoremIpsumAgent(params, context),
   contentFiller: async (params, context) => runLoremIpsumAgent(params, context),
+  chat: async (params, context) => runChatAgent(params, context),
   contrastChecker: async (params, context) => runContrastCheckerAgent(params, context),
 };
 
@@ -114,6 +116,31 @@ ${contextSummary}
   }
 
   console.log("[Orchestrator] Task plan:", tasks);
+
+  // Check if we should use chat agent instead
+  if (shouldUseChatAgent(userPrompt, tasks)) {
+    console.log("[Orchestrator] Using chat agent for informational query");
+
+    const context: Record<string, any> = {
+      figmaContext: buildFigmaContext(),
+      frameId: null,
+      userPrompt: userPrompt,
+    };
+
+    try {
+      const chatResult = await runChatAgent({}, context);
+      return [chatResult];
+    } catch (err) {
+      console.error("[Orchestrator] Chat agent failed:", err);
+      return [
+        {
+          success: false,
+          message: "Failed to get response from chat agent",
+          error: String(err),
+        },
+      ];
+    }
+  }
 
   const results: AgentResponse[] = [];
 

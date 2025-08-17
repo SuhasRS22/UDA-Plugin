@@ -1,24 +1,24 @@
 /// <reference types="@figma/plugin-typings" />
- 
+
 import { llmTextClient } from "../shared/llmClient";
 import { AgentResponse, NodeSnapshot } from "../utils/types";
- 
+
 function parseJsonFromLLMResponse(response: string): any {
   let jsonText = response.trim();
- 
+
   if (jsonText.includes("```json")) {
     jsonText = jsonText.replace(/```json\s*/g, "").replace(/```\s*/g, "");
   }
   if (jsonText.includes("```")) {
     jsonText = jsonText.replace(/```\s*/g, "");
   }
- 
+
   try {
     return JSON.parse(jsonText);
   } catch (error) {
     // Continue to pattern extraction
   }
- 
+
   const objectMatch = jsonText.match(/\{[\s\S]*?\}/);
   if (objectMatch) {
     try {
@@ -27,7 +27,7 @@ function parseJsonFromLLMResponse(response: string): any {
       // Continue to array pattern
     }
   }
- 
+
   const arrayMatch = jsonText.match(/\[[\s\S]*?\]/);
   if (arrayMatch) {
     try {
@@ -36,10 +36,10 @@ function parseJsonFromLLMResponse(response: string): any {
       // Final fallback will throw
     }
   }
- 
+
   throw new Error("Could not extract valid JSON from LLM response");
 }
- 
+
 async function getAvailableFont(
   selection: readonly SceneNode[],
   figmaContext?: any
@@ -57,7 +57,7 @@ async function getAvailableFont(
       }
     }
   }
- 
+
   // Legacy support for old context structure
   if (figmaContext?.nodes?.text?.length > 0) {
     for (const textNode of figmaContext.nodes.text) {
@@ -71,9 +71,9 @@ async function getAvailableFont(
       }
     }
   }
- 
+
   let existingFont: FontName | null = null;
- 
+
   function findTextFont(node: SceneNode): boolean {
     if (node.type === "TEXT") {
       const textNode = node as TextNode;
@@ -88,11 +88,11 @@ async function getAvailableFont(
     }
     return false;
   }
- 
+
   for (const item of selection) {
     if (findTextFont(item)) break;
   }
- 
+
   if (existingFont) {
     try {
       await figma.loadFontAsync(existingFont);
@@ -101,7 +101,7 @@ async function getAvailableFont(
       // Fall through to Roboto default
     }
   }
- 
+
   const defaultFont = { family: "Roboto", style: "Regular" };
   try {
     await figma.loadFontAsync(defaultFont);
@@ -110,11 +110,11 @@ async function getAvailableFont(
     return defaultFont;
   }
 }
- 
+
 // Extract updated node details for agent pipeline context
 async function extractNodeSnapshot(nodes: TextNode[]): Promise<NodeSnapshot[]> {
   const nodeSnapshots: NodeSnapshot[] = [];
- 
+
   for (const node of nodes) {
     try {
       const snapshot: NodeSnapshot = {
@@ -147,10 +147,10 @@ async function extractNodeSnapshot(nodes: TextNode[]): Promise<NodeSnapshot[]> {
       );
     }
   }
- 
+
   return nodeSnapshots;
 }
- 
+
 export async function runLoremIpsumAgent(
   parameters: any,
   contextParams: any
@@ -158,23 +158,38 @@ export async function runLoremIpsumAgent(
   let type: string;
   let forceFill: boolean;
   let content: string | undefined;
- 
+
   let figmaContext = contextParams.figmaContext || null;
- 
+
   const params = parameters;
   const context = contextParams; // Use full contextParams instead of just figmaContext
- 
+
   type = params.type || "paragraph";
   forceFill = params.forceFill || false;
-  content = context?.userPrompt || params.customContent;
- 
+
+  // Enhanced content extraction - check multiple sources
+  content =
+    params.content ||
+    params.customContent ||
+    params.prompt ||
+    context?.userPrompt ||
+    contextParams?.userPrompt;
+
+  console.log("[ContentFiller] Content sources checked:");
+  console.log("- params.content:", params.content);
+  console.log("- params.customContent:", params.customContent);
+  console.log("- params.prompt:", params.prompt);
+  console.log("- context.userPrompt:", context?.userPrompt);
+  console.log("- contextParams.userPrompt:", contextParams?.userPrompt);
+  console.log("- Final content:", content);
+
   const frameAction = params.frameAction;
   if (frameAction === "update") {
     forceFill = true;
   }
- 
+
   const selection = figma.currentPage.selection;
- 
+
   if (content && typeof content === "string" && content.trim()) {
     try {
       return await handleAdvancedContentGeneration(
@@ -203,13 +218,18 @@ export async function runLoremIpsumAgent(
       };
     }
   }
- 
+
   return {
     success: false,
-    message: "No content prompt provided in figmaContext or parameters",
+    message: `No content prompt provided. Available parameters: ${Object.keys(
+      params
+    ).join(", ")}. Available context: ${Object.keys(contextParams).join(", ")}`,
+    updatedNodes: [],
+    createdNodes: [],
+    deletedNodeIds: [],
   };
 }
- 
+
 async function handleAdvancedContentGeneration(
   selection: readonly SceneNode[],
   userPrompt: string,
@@ -217,17 +237,17 @@ async function handleAdvancedContentGeneration(
   figmaContext?: any
 ): Promise<AgentResponse> {
   let frameDetails;
- 
+
   // Always prioritize current selection first
   const currentSelection = figma.currentPage.selection;
- 
+
   if (currentSelection.length > 0) {
     // Use current selection and analyze it directly
     frameDetails = analyzeSelection(currentSelection);
   } else if (figmaContext && figmaContext.textNodes) {
     // Use textNodes from buildFigmaContext if no current selection
     const textNodes = figmaContext.textNodes as TextNode[];
- 
+
     frameDetails = {
       selectedNodes: textNodes,
       textNodes: textNodes,
@@ -252,7 +272,7 @@ async function handleAdvancedContentGeneration(
         }
       }
     }
- 
+
     frameDetails = {
       selectedNodes:
         figmaContext.nodes.all && figmaContext.nodes.all.length > 0
@@ -268,10 +288,24 @@ async function handleAdvancedContentGeneration(
   } else {
     frameDetails = analyzeSelection(selection);
   }
- 
-  const promptLower = userPrompt.toLowerCase();
-  const isReplaceRequest = promptLower.includes("replace") || promptLower.includes("change") || promptLower.includes("update") || forceFill;
-  const isAddRequest = promptLower.includes("add") || promptLower.includes("also") || promptLower.includes("more") || promptLower.includes("additional") || promptLower.includes("new") || (frameDetails.textNodes.length > 0 && promptLower.includes("generate") && !promptLower.includes("replace") && !promptLower.includes("update") && !forceFill);
+
+  const isReplaceRequest =
+    userPrompt.toLowerCase().includes("replace") ||
+    userPrompt.toLowerCase().includes("change") ||
+    userPrompt.toLowerCase().includes("update") ||
+    forceFill;
+
+  const isAddRequest =
+    userPrompt.toLowerCase().includes("add") ||
+    userPrompt.toLowerCase().includes("also") ||
+    userPrompt.toLowerCase().includes("more") ||
+    userPrompt.toLowerCase().includes("additional") ||
+    userPrompt.toLowerCase().includes("new") ||
+    (frameDetails.textNodes.length > 0 &&
+      userPrompt.toLowerCase().includes("generate") &&
+      !userPrompt.toLowerCase().includes("replace") &&
+      !userPrompt.toLowerCase().includes("update") &&
+      !forceFill);
 
   if (frameDetails.selectedNodes.length === 0) {
     return {
@@ -281,31 +315,7 @@ async function handleAdvancedContentGeneration(
   }
 
   try {
-    // If the frame is empty (no text nodes), always add new nodes
-    if (frameDetails.textNodes.length === 0) {
-      return await createNewContent(
-        userPrompt,
-        frameDetails,
-        true,
-        figmaContext
-      );
-    }
-
-
-    // If prompt is add/also/more/new, add new nodes ONLY (do not update existing)
-    if (isAddRequest) {
-      // Remove all text nodes from frameDetails so only creation happens
-      const frameDetailsForAdd = { ...frameDetails, textNodes: [] };
-      return await createNewContent(
-        userPrompt,
-        frameDetailsForAdd,
-        true,
-        figmaContext
-      );
-    }
-
-    // If prompt is update/replace/change, update existing nodes
-    if (isReplaceRequest) {
+    if (frameDetails.textNodes.length > 0 && isReplaceRequest) {
       return await performSmartTextReplacement(
         frameDetails.textNodes,
         userPrompt,
@@ -313,12 +323,20 @@ async function handleAdvancedContentGeneration(
       );
     }
 
-    // Default: update existing nodes
-    return await updateExistingContent(
-      userPrompt,
-      frameDetails.textNodes,
-      figmaContext
-    );
+    if (frameDetails.textNodes.length > 0 && !isAddRequest) {
+      return await updateExistingContent(
+        userPrompt,
+        frameDetails.textNodes,
+        figmaContext
+      );
+    } else {
+      return await createNewContent(
+        userPrompt,
+        frameDetails,
+        isAddRequest,
+        figmaContext
+      );
+    }
   } catch (error) {
     console.error("[ContentFiller] Error:", error);
     return {
@@ -329,7 +347,7 @@ async function handleAdvancedContentGeneration(
     };
   }
 }
- 
+
 async function performSmartTextReplacement(
   textNodes: TextNode[],
   userPrompt: string,
@@ -337,39 +355,39 @@ async function performSmartTextReplacement(
 ): Promise<AgentResponse> {
   let replacedCount = 0;
   const font = await getAvailableFont(textNodes, figmaContext);
- 
+
   for (let i = 0; i < textNodes.length; i++) {
     const textNode = textNodes[i];
- 
+
     if (!textNode) {
       continue;
     }
- 
+
     const currentText = textNode.characters || "";
- 
+
     const prompt = `You are a text replacement assistant. Perform the requested text transformation and return ONLY the new text.
- 
+
 CURRENT TEXT: "${currentText}"
 USER REQUEST: "${userPrompt}"
- 
+
 INSTRUCTIONS:
 1. If request is "update [word] to [newword]", find that word and replace it with the new word
 2. If request is "change [phrase] to [newphrase]", find that phrase and replace it  
 3. Preserve the original case style (UPPERCASE stays UPPERCASE, lowercase stays lowercase)
 4. Return ONLY the modified text, no explanations, no quotes
- 
+
 EXAMPLES:
 Input: "HELLO WORLD" + "update hello to hi" → Output: HI WORLD
 Input: "Hello World" + "update hello to hi" → Output: Hi World
 Input: "FIRST THING" + "update first to last" → Output: LAST THING
 Input: "First Thing" + "update first to last" → Output: Last Thing
- 
+
 Your task: Transform "${currentText}" based on "${userPrompt}"
 Return only the new text:`;
- 
+
     try {
       const newText = await llmTextClient(prompt);
- 
+
       if (newText && newText !== currentText && newText.length > 0) {
         await figma.loadFontAsync(font);
         textNode.fontName = font;
@@ -383,15 +401,15 @@ Return only the new text:`;
       );
     }
   }
- 
+
   if (replacedCount > 0) {
     // Don't change selection - keep the original frame selected so user can continue working with it
     // figma.currentPage.selection = textNodes;
     figma.notify(`✅ Updated ${replacedCount} text fields`, { timeout: 3000 });
- 
+
     // Extract updated node details for next agent
     const updatedNodeSnapshots = await extractNodeSnapshot(textNodes);
- 
+
     return {
       success: true,
       message: `Updated ${replacedCount} text fields based on your request`,
@@ -404,12 +422,12 @@ Return only the new text:`;
     };
   }
 }
- 
+
 function analyzeSelection(selection: readonly SceneNode[]) {
   const textNodes: TextNode[] = [];
   const containers: (FrameNode | GroupNode | ComponentNode | InstanceNode)[] =
     [];
- 
+
   function collectNodes(node: SceneNode) {
     if (node.type === "TEXT") {
       textNodes.push(node as TextNode);
@@ -423,18 +441,18 @@ function analyzeSelection(selection: readonly SceneNode[]) {
         node as FrameNode | GroupNode | ComponentNode | InstanceNode
       );
     }
- 
+
     if ("children" in node) {
       for (const child of node.children) {
         collectNodes(child);
       }
     }
   }
- 
+
   for (const node of selection) {
     collectNodes(node);
   }
- 
+
   return {
     selectedNodes: Array.from(selection),
     textNodes,
@@ -443,7 +461,7 @@ function analyzeSelection(selection: readonly SceneNode[]) {
     hasTextFields: textNodes.length > 0,
   };
 }
- 
+
 function preserveAndSetText(node: TextNode, text: string | any) {
   const style = {
     fontSize: node.fontSize,
@@ -451,11 +469,98 @@ function preserveAndSetText(node: TextNode, text: string | any) {
     textAlignHorizontal: node.textAlignHorizontal,
     textAlignVertical: node.textAlignVertical,
   };
- 
+
   node.characters = String(text);
   Object.assign(node, style);
 }
- 
+
+// Advanced input field detection based on visual design patterns
+function detectInputField(node: TextNode, allTextNodes: TextNode[]): boolean {
+  // 1. Check if the node name suggests it's an input
+  const nodeName = node.name.toLowerCase();
+  const isNamedAsInput =
+    nodeName.includes("input") ||
+    nodeName.includes("field") ||
+    nodeName.includes("textbox") ||
+    nodeName.includes("entry") ||
+    nodeName.includes("form");
+
+  // 2. Check if the text content is clearly placeholder-like
+  const text = node.characters || "";
+  const isPlaceholderContent =
+    !text ||
+    text.trim() === "" ||
+    text === "Type something" ||
+    text === "Enter text" ||
+    text === "Your text here" ||
+    text.toLowerCase().includes("placeholder") ||
+    text.toLowerCase().includes("enter ") ||
+    text.startsWith("Lorem") ||
+    text === "..." ||
+    text === "---";
+
+  // 3. Check if there's a nearby text node that could be its label
+  const hasNearbyLabel = allTextNodes.some((otherNode) => {
+    if (otherNode === node) return false;
+
+    // Check if it's positioned near this node (likely a label)
+    const isNearby =
+      Math.abs(otherNode.y - node.y) < 50 &&
+      Math.abs(otherNode.x - node.x) < 200;
+
+    // Check if the other node has label-like text
+    const otherText = otherNode.characters || "";
+    const isLabelLike =
+      otherText.length < 20 &&
+      (otherText.toLowerCase().includes("name") ||
+        otherText.toLowerCase().includes("email") ||
+        otherText.toLowerCase().includes("phone") ||
+        otherText.toLowerCase().includes("address") ||
+        otherText.endsWith(":") ||
+        /^[A-Z][a-z]+(\s[A-Z][a-z]+)*$/.test(otherText)); // Title case pattern
+
+    return isNearby && isLabelLike;
+  });
+
+  // 4. Check visual characteristics that suggest input field
+  const hasInputVisuals = (() => {
+    try {
+      // Check if it has a background fill (input fields often have backgrounds)
+      const hasFill =
+        node.fills && Array.isArray(node.fills) && node.fills.length > 0;
+
+      // Check if it has a stroke (input fields often have borders)
+      const hasStroke =
+        node.strokes && Array.isArray(node.strokes) && node.strokes.length > 0;
+
+      // Check if it's in a rectangle/frame that might be an input container
+      const parentHasInputStyle =
+        node.parent &&
+        (node.parent.type === "RECTANGLE" || node.parent.type === "FRAME") &&
+        node.parent.name.toLowerCase().includes("input");
+
+      return hasFill || hasStroke || parentHasInputStyle;
+    } catch (error) {
+      return false;
+    }
+  })();
+
+  // Decision logic: it's an input field if:
+  // - It's explicitly named as an input, OR
+  // - It has placeholder content AND (has nearby label OR has input visuals)
+  const isInput =
+    isNamedAsInput ||
+    (isPlaceholderContent && (hasNearbyLabel || hasInputVisuals));
+
+  console.log(
+    `[InputDetection] "${text}" (${nodeName}) → ${
+      isInput ? "INPUT" : "PRESERVE"
+    } [named:${isNamedAsInput}, placeholder:${isPlaceholderContent}, label:${hasNearbyLabel}, visual:${hasInputVisuals}]`
+  );
+
+  return Boolean(isInput);
+}
+
 async function updateExistingContent(
   userPrompt: string,
   textNodes: TextNode[],
@@ -464,24 +569,54 @@ async function updateExistingContent(
   const formStructure = textNodes.map((node, index) => {
     const getFontInfo = (fontName: FontName | symbol) =>
       typeof fontName === "object" ? fontName.family : "mixed";
- 
+
     const getFontSize = (fontSize: number | symbol) =>
       typeof fontSize === "number" ? fontSize.toString() : "mixed";
- 
+
+    // Check if this is a simple content request (not a form filling request)
+    const isSimpleContentRequest =
+      userPrompt.toLowerCase().includes("add") ||
+      userPrompt.toLowerCase().includes("put") ||
+      userPrompt.toLowerCase().includes("insert") ||
+      !userPrompt.toLowerCase().includes("fill") ||
+      textNodes.length === 1; // Single text node requests are usually simple
+
+    // Use different detection logic based on request type
+    const shouldUpdate = isSimpleContentRequest
+      ? true // For simple requests, update any text node
+      : detectInputField(node, textNodes); // For form filling, use smart detection
+
     return {
       index,
       name: node.name,
       current: node.characters,
-      isEmpty:
-        !node.characters ||
-        node.characters.trim() === "" ||
-        node.characters === "Type something" ||
-        node.characters.startsWith("Lorem"),
+      isEmpty: shouldUpdate,
       fontSize: getFontSize(node.fontSize),
       fontFamily: getFontInfo(node.fontName),
     };
   });
- 
+
+  // Only include fields that should be updated
+  const fillableFields = formStructure.filter((field) => field.isEmpty);
+
+  console.log("[ContentFiller] Field analysis:");
+  formStructure.forEach((field) => {
+    console.log(
+      `- Field ${field.index}: "${field.current}" (${field.name}) → ${
+        field.isEmpty ? "FILLABLE" : "PRESERVE"
+      }`
+    );
+  });
+
+  if (fillableFields.length === 0) {
+    return {
+      success: false,
+      message:
+        "No fillable placeholder fields found. Select fields with placeholder text or empty content.",
+      updatedNodes: [],
+    };
+  }
+
   let contextInfo = "";
   if (figmaContext) {
     if (figmaContext.textAnalysis) {
@@ -491,40 +626,41 @@ async function updateExistingContent(
       contextInfo += `\nLayout: ${figmaContext.layoutAnalysis.totalFrames} frames`;
     }
   }
- 
+
   const prompt = `USER REQUEST: "${userPrompt}"
- 
-EXISTING FIELDS:
-${formStructure
+
+FILLABLE FIELDS (only placeholder/empty fields):
+${fillableFields
   .map(
     (field) =>
-      `Field ${field.index}: "${field.name}" (current: "${field.current}", empty: ${field.isEmpty})`
+      `Field ${field.index}: "${field.name}" (current: "${field.current}")`
   )
   .join("\n")}
- 
+
 CRITICAL: You must respond ONLY with a JSON object. No explanations, no context, no additional text.
- 
+
 Examples of CORRECT responses:
 {"0": "John Smith", "1": "Sarah Wilson"}
 {"0": "john@email.com", "1": "sarah@company.org"}
 {"0": "+1-555-0123", "1": "+1-555-0456"}
- 
+
 Rules:
-- Names request = person names only
+- Only fill the placeholder/empty fields listed above
+- Names request = person names only  
 - Email request = email addresses only
 - Phone request = phone numbers only
 - Response must be valid JSON object with field indices as keys
 - NO explanations, NO additional text
- 
+
 JSON object:`;
- 
+
   const response = await llmTextClient(prompt);
- 
+
   let contentMap: Record<string, string> = {};
- 
+
   try {
     const parsedResponse = parseJsonFromLLMResponse(response);
- 
+
     if (Array.isArray(parsedResponse)) {
       parsedResponse.forEach((item, index) => {
         contentMap[index.toString()] = String(item).trim();
@@ -542,53 +678,63 @@ JSON object:`;
       });
     }
   }
- 
+
   if (Object.keys(contentMap).length === 0) {
-    textNodes.forEach((_, index) => {
-      contentMap[index.toString()] = `Generated Content ${index + 1}`;
+    fillableFields.forEach((field) => {
+      contentMap[field.index.toString()] = `Generated Content ${
+        field.index + 1
+      }`;
     });
   }
- 
+
   let updatedCount = 0;
   const font = await getAvailableFont(textNodes, figmaContext);
- 
+  const updatedTextNodes: TextNode[] = [];
+
   for (const [indexStr, content] of Object.entries(contentMap)) {
     const index = parseInt(indexStr);
     if (index >= 0 && index < textNodes.length) {
       const textNode = textNodes[index];
- 
-      try {
-        await figma.loadFontAsync(font);
-        textNode.fontName = font;
-        textNode.characters = String(content);
-        updatedCount++;
-      } catch (error) {
-        console.error(`[ContentFiller] Error updating node ${index}:`, error);
+      const field = formStructure.find((f) => f.index === index);
+
+      // Only update if this field was identified as fillable
+      if (field && field.isEmpty) {
+        try {
+          await figma.loadFontAsync(font);
+          textNode.fontName = font;
+          textNode.characters = String(content);
+          updatedCount++;
+          updatedTextNodes.push(textNode);
+        } catch (error) {
+          console.error(`[ContentFiller] Error updating node ${index}:`, error);
+        }
       }
     }
   }
- 
+
   if (updatedCount > 0) {
     // Don't change selection - keep the original frame selected so user can continue working with it
     // figma.currentPage.selection = textNodes;
-    figma.notify(`✅ Updated ${updatedCount} text fields`, { timeout: 2000 });
- 
-    // Extract updated node details for next agent
-    const updatedNodeSnapshots = await extractNodeSnapshot(textNodes);
- 
+    figma.notify(`✅ Updated ${updatedCount} placeholder fields`, {
+      timeout: 2000,
+    });
+
+    // Extract updated node details for next agent - only include actually updated nodes
+    const updatedNodeSnapshots = await extractNodeSnapshot(updatedTextNodes);
+
     return {
       success: updatedCount > 0,
-      message: `Updated ${updatedCount} text fields with new content`,
+      message: `Updated ${updatedCount} placeholder fields with new content`,
       updatedNodes: updatedNodeSnapshots,
     };
   }
- 
+
   return {
     success: updatedCount > 0,
     message: `Updated ${updatedCount} text fields with new content`,
   };
 }
- 
+
 async function createNewContent(
   userPrompt: string,
   frameDetails: any,
@@ -615,54 +761,8 @@ async function createNewContent(
       }`;
     }
   }
- 
-  // Determine if the request is for a single type (strict) or mixed
-  const promptLower = userPrompt.toLowerCase();
-  const isNamesOnly = /^\s*\d*\s*names?\s*$/i.test(userPrompt.trim()) || (promptLower.includes("name") && !promptLower.match(/email|phone|detail|contact|user|address|company|respectively|and|&/));
-  const isEmailsOnly = /^\s*\d*\s*emails?\s*$/i.test(userPrompt.trim()) || (promptLower.includes("email") && !promptLower.match(/name|phone|detail|contact|user|address|company|respectively|and|&/));
-  const isPhonesOnly = /^\s*\d*\s*phones?\s*$/i.test(userPrompt.trim()) || (promptLower.includes("phone") && !promptLower.match(/name|email|detail|contact|user|address|company|respectively|and|&/));
-  const isMixed = /names?.*(and|&).*email|email.*(and|&).*name|person.*detail|contact.*info|user.*data|detail.*person|respectively/.test(promptLower);
 
-  let strictType = null;
-  if (isNamesOnly) strictType = "names";
-  else if (isEmailsOnly) strictType = "emails";
-  else if (isPhonesOnly) strictType = "phones";
-
-  let prompt = "";
-  if (strictType) {
-    // Strict single type prompt
-    prompt = `USER REQUEST: "${userPrompt}"
-
-CRITICAL: You must respond ONLY with a JSON array of ${strictType}.
-No explanations, no context, no additional text, no other data types.
-
-Examples:
-${strictType === "names" ? '["John Smith", "Sarah Wilson", "Mike Davis"]' : strictType === "emails" ? '["john@email.com", "sarah@company.org", "mike@startup.io"]' : '["+1-555-0123", "+1-555-0456", "+1-555-0789"]'}
-
-Rules:
-- Only ${strictType} in the array, no emails, phones, or other details.
-- Generate ${(() => {
-      const match = userPrompt.match(/(\d+)/);
-      const num = match ? parseInt(match[1]) : null;
-      if (num) {
-        return num.toString();
-      } else if (userPrompt.toLowerCase().includes("more")) {
-        return "8";
-      } else if (userPrompt.toLowerCase().includes("many")) {
-        return "10";
-      } else if (userPrompt.toLowerCase().includes("lots")) {
-        return "12";
-      } else {
-        return "6";
-      }
-    })()} items total
-- Response must be valid JSON array
-- NO explanations, NO additional text
-
-JSON array:`;
-  } else {
-    // Mixed or fallback prompt
-    prompt = `USER REQUEST: "${userPrompt}"
+  const prompt = `USER REQUEST: "${userPrompt}"
 
 CRITICAL: You must respond ONLY with a JSON array. No explanations, no context, no additional text.
 
@@ -687,128 +787,53 @@ Rules:
 - Detect mixed requests: "names and emails", "person details", "contact info", "user data"
 - Group similar data together for easier node placement
 - Generate ${(() => {
-      const match = userPrompt.match(/(\d+)/);
-      const num = match ? parseInt(match[1]) : null;
-      const isRespectively = userPrompt.toLowerCase().includes("respectively");
-      const isMixed =
-        /names?.*(and|&).*email|email.*(and|&).*name|person.*detail|contact.*info|user.*data|detail.*person/.test(
-          userPrompt.toLowerCase()
-        );
+    const match = userPrompt.match(/(\d+)/);
+    const num = match ? parseInt(match[1]) : null;
+    const isRespectively = userPrompt.toLowerCase().includes("respectively");
+    const isMixed =
+      /names?.*(and|&).*email|email.*(and|&).*name|person.*detail|contact.*info|user.*data|detail.*person/.test(
+        userPrompt.toLowerCase()
+      );
 
-      if (num && isRespectively) {
-        return (num * 2).toString();
-      } else if (num && isMixed) {
-        return (num * 3).toString();
-      } else if (num) {
-        return num.toString();
-      } else if (isMixed) {
-        return "15";
-      } else if (userPrompt.toLowerCase().includes("more")) {
-        return "8";
-      } else if (userPrompt.toLowerCase().includes("many")) {
-        return "10";
-      } else if (userPrompt.toLowerCase().includes("lots")) {
-        return "12";
-      } else {
-        return "6";
-      }
-    })()} items total
+    if (num && isRespectively) {
+      return (num * 2).toString();
+    } else if (num && isMixed) {
+      return (num * 3).toString();
+    } else if (num) {
+      return num.toString();
+    } else if (isMixed) {
+      return "15";
+    } else if (userPrompt.toLowerCase().includes("more")) {
+      return "8";
+    } else if (userPrompt.toLowerCase().includes("many")) {
+      return "10";
+    } else if (userPrompt.toLowerCase().includes("lots")) {
+      return "12";
+    } else {
+      return "6";
+    }
+  })()} items total
 - Response must be valid JSON array
 - NO explanations, NO additional text
 
 JSON array:`;
-  }
- 
+
   let response: string;
-  let llmInProgress = (globalThis as any).__llmInProgress || false;
-  if (llmInProgress) {
-    figma.notify('⏳ Please wait for the previous request to finish.', { timeout: 3000 });
-    return {
-      success: false,
-      message: 'Previous LLM request still in progress. Please wait.',
-    };
-  }
-  (globalThis as any).__llmInProgress = true;
   try {
-    try {
-      response = await llmTextClient(prompt);
-    } catch (error) {
-      let errMsg = '';
-      if (error && typeof error === 'object') {
-        if ('message' in error && typeof (error as any).message === 'string') {
-          errMsg = (error as any).message;
-        } else if ('error' in error && typeof (error as any).error === 'string') {
-          errMsg = (error as any).error;
-        } else {
-          errMsg = JSON.stringify(error);
-        }
-      } else {
-        errMsg = String(error);
-      }
-      if (errMsg.includes('429')) {
-        // Try to parse retry delay from error message
-        let retryDelay = 1500; // default ms
-        const match = errMsg.match(/try again in ([\d.]+)s/i);
-        if (match && match[1]) {
-          retryDelay = Math.ceil(parseFloat(match[1]) * 1000);
-        }
-        figma.notify(`⚠️ Rate limit hit. Retrying in ${retryDelay / 1000}s...`, { timeout: 2000 });
-        await new Promise(res => setTimeout(res, retryDelay));
-        try {
-          response = await llmTextClient(prompt);
-        } catch (retryError) {
-          let retryMsg = '';
-          if (retryError && typeof retryError === 'object') {
-            if ('message' in retryError && typeof (retryError as any).message === 'string') {
-              retryMsg = (retryError as any).message;
-            } else if ('error' in retryError && typeof (retryError as any).error === 'string') {
-              retryMsg = (retryError as any).error;
-            } else {
-              retryMsg = JSON.stringify(retryError);
-            }
-          } else {
-            retryMsg = String(retryError);
-          }
-          if (retryMsg.includes('429')) {
-            figma.notify('❌ Rate limit reached for LLM API. Please wait a few seconds and try again.', { timeout: 4000 });
-            (globalThis as any).__llmInProgress = false;
-            return {
-              success: false,
-              message: 'Rate limit reached for LLM API. Please wait and try again.',
-              error: retryMsg,
-            };
-          }
-          const errorMsg = `LLM request failed: ${retryMsg}`;
-          console.error("[ContentFiller]", errorMsg, retryError);
-          figma.notify(errorMsg, { timeout: 4000 });
-          (globalThis as any).__llmInProgress = false;
-          return {
-            success: false,
-            message: errorMsg,
-            error: retryMsg,
-          };
-        }
-      } else {
-        const errorMsg = `LLM request failed: ${errMsg}`;
-        console.error("[ContentFiller]", errorMsg, error);
-        figma.notify(errorMsg, { timeout: 4000 });
-        (globalThis as any).__llmInProgress = false;
-        return {
-          success: false,
-          message: errorMsg,
-          error: errMsg,
-        };
-      }
-    }
-  } finally {
-    (globalThis as any).__llmInProgress = false;
+    response = await llmTextClient(prompt);
+  } catch (error) {
+    const errorMsg = `LLM request failed: ${
+      error instanceof Error ? error.message : "Unknown error"
+    }`;
+    console.error("[ContentFiller]", errorMsg, error);
+    throw new Error(errorMsg);
   }
- 
+
   let contentItems: string[] = [];
- 
+
   try {
     const parsedResponse = parseJsonFromLLMResponse(response);
- 
+
     if (Array.isArray(parsedResponse)) {
       contentItems = parsedResponse.map((item) => {
         if (typeof item === "string") {
@@ -829,7 +854,7 @@ JSON array:`;
           line && !line.startsWith("Based on") && !line.startsWith("Since")
       )
       .filter((line) => line.length > 2);
- 
+
     const quotedContent = response.match(/"([^"]+)"/g);
     if (quotedContent && quotedContent.length > 0) {
       contentItems = quotedContent.map((match) =>
@@ -845,7 +870,7 @@ JSON array:`;
       ];
     }
   }
- 
+
   if (contentItems.length === 0) {
     contentItems = [
       "Generated Content 1",
@@ -853,48 +878,38 @@ JSON array:`;
       "Generated Content 3",
     ];
   }
- 
+
   if (contentItems.length === 0) {
     throw new Error("No content generated by LLM");
   }
- 
+
   const existingTextNodes = frameDetails.textNodes;
- 
+
   let container: BaseNode & ChildrenMixin = figma.currentPage;
   let startX = 100;
   let startY = 100;
 
   const currentSelection = figma.currentPage.selection;
 
-  // Helper to get relative coordinates for placement inside a frame
-  function getFrameRelativeCoords(frame: any) {
-    // Figma API: x/y are relative to parent, absoluteTransform gives global
-    // We'll use (0,0) as the top-left inside the frame
-    return { x: 20, y: 20 };
-  }
-
-  if (currentSelection.length > 0) {
-    for (const node of currentSelection) {
-      if (node.type === "FRAME" && "appendChild" in node) {
-        container = node as BaseNode & ChildrenMixin;
-        const rel = getFrameRelativeCoords(container);
-        startX = rel.x;
-        startY = rel.y;
-        break;
-      }
+  for (const node of currentSelection) {
+    if (node.type === "FRAME" && "appendChild" in node) {
+      container = node as BaseNode & ChildrenMixin;
+      startX = 20;
+      startY = 20;
+      break;
     }
   }
 
   if (container === figma.currentPage && frameDetails.containers.length > 0) {
     const selectedContainer = frameDetails.containers[0];
+
     if (
       "appendChild" in selectedContainer &&
       typeof selectedContainer.appendChild === "function"
     ) {
       container = selectedContainer as BaseNode & ChildrenMixin;
-      const rel = getFrameRelativeCoords(container);
-      startX = rel.x;
-      startY = rel.y;
+      startX = 20;
+      startY = 20;
     }
   }
 
@@ -905,6 +920,7 @@ JSON array:`;
   ) {
     const firstTextNode = existingTextNodes[0];
     let parentFrame = firstTextNode.parent;
+
     while (
       parentFrame &&
       parentFrame.type !== "FRAME" &&
@@ -912,34 +928,24 @@ JSON array:`;
     ) {
       parentFrame = parentFrame.parent;
     }
+
     if (
       parentFrame &&
       "appendChild" in parentFrame &&
       typeof parentFrame.appendChild === "function"
     ) {
       container = parentFrame as BaseNode & ChildrenMixin;
-      const rel = getFrameRelativeCoords(container);
-      startX = rel.x;
-      startY = rel.y;
+      startX = 20;
+      startY = 20;
     }
   }
- 
+
   let processedCount = 0;
   let errorCount = 0;
   const errors: string[] = [];
+  const createdNodes: TextNode[] = []; // Track newly created nodes
   const font = await getAvailableFont(frameDetails.selectedNodes);
 
-  // Gather all existing text node bounding boxes in the container
-  const existingBoxes: { x: number; y: number; width: number; height: number }[] = [];
-  if ("children" in container) {
-    for (const child of container.children) {
-      if (child.type === "TEXT") {
-        existingBoxes.push({ x: child.x, y: child.y, width: child.width, height: child.height });
-      }
-    }
-  }
-
-  // Only update existing nodes in a single batch, no parallel LLM calls
   for (
     let i = 0;
     i < Math.min(contentItems.length, existingTextNodes.length);
@@ -947,13 +953,17 @@ JSON array:`;
   ) {
     const textNode = existingTextNodes[i];
     const content = contentItems[i];
+
     try {
       await figma.loadFontAsync(font);
       textNode.fontName = font;
       textNode.characters = content;
       processedCount++;
     } catch (error) {
-      const errorMsg = `Failed to update existing node: "${content.substring(0, 20)}..."`;
+      const errorMsg = `Failed to update existing node: "${content.substring(
+        0,
+        20
+      )}..."`;
       errors.push(errorMsg);
       errorCount++;
     }
@@ -971,6 +981,7 @@ JSON array:`;
 
   remainingContent.forEach((content, index) => {
     const item = { content, index };
+
     if (content.includes("@") && content.includes(".")) {
       dataTypes.emails.push(item);
     } else if (content.match(/^\+?[\d\s\-\(\)\.]+$/) && content.length > 7) {
@@ -990,93 +1001,30 @@ JSON array:`;
   const rowHeight = 35;
   let currentColumn = 0;
 
-
-  // Helper to find the next available (x, y) position in a grid (no overlap, inside container)
-  function findNextAvailablePosition(
-    startX: number,
-    startY: number,
-    width: number,
-    height: number,
-    maxColumns: number = 5,
-    maxRows: number = 100,
-    containerBounds?: { x: number; y: number; width: number; height: number }
-  ): { x: number; y: number } | null {
-    for (let row = 0; row < maxRows; row++) {
-      for (let col = 0; col < maxColumns; col++) {
-        const x = startX + col * columnWidth;
-        const y = startY + row * rowHeight;
-        // Check if within container bounds (if provided)
-        if (containerBounds) {
-          if (
-            x < containerBounds.x ||
-            y < containerBounds.y ||
-            x + width > containerBounds.x + containerBounds.width ||
-            y + height > containerBounds.y + containerBounds.height
-          ) {
-            continue;
-          }
-        }
-        const overlaps = existingBoxes.some(
-          (box) =>
-            x < box.x + box.width &&
-            x + width > box.x &&
-            y < box.y + box.height &&
-            y + height > box.y
-        );
-        if (!overlaps) {
-          return { x, y };
-        }
-      }
-    }
-    // No available position
-    return null;
-  }
-
   const createNodesForType = async (
     items: typeof dataTypes.names,
     typeName: string,
     column: number
   ) => {
-    // Determine container bounds if possible
-    let containerBounds: { x: number; y: number; width: number; height: number } | undefined = undefined;
-    if (container !== figma.currentPage && 'x' in container && 'y' in container && 'width' in container && 'height' in container) {
-      // For frames, use (0,0) as top-left inside the frame
-      containerBounds = {
-        x: 0,
-        y: 0,
-        width: (container as any).width,
-        height: (container as any).height,
-      };
-    }
     for (let i = 0; i < items.length; i++) {
       const { content } = items[i];
+
       try {
-        const pos = findNextAvailablePosition(
-          startX + column * columnWidth,
-          startY,
-          150,
-          rowHeight,
-          5,
-          100,
-          containerBounds
-        );
-        if (!pos) {
-          // No available space in container for this node
-          const errorMsg = `No space to add ${typeName} node: "${content.substring(0, 20)}..."`;
-          errors.push(errorMsg);
-          errorCount++;
-          continue;
-        }
         const textNode = figma.createText();
         await figma.loadFontAsync(font);
+
         textNode.fontName = font;
         textNode.characters = content;
         textNode.fontSize = 16;
-        textNode.name = generateSmartNodeName(content, userPrompt, items[i].index);
-        textNode.x = pos.x;
-        textNode.y = pos.y;
-        // Add this node's box to the list so future nodes don't overlap
-        existingBoxes.push({ x: textNode.x, y: textNode.y, width: 150, height: rowHeight });
+        textNode.name = generateSmartNodeName(
+          content,
+          userPrompt,
+          items[i].index
+        );
+
+        textNode.x = startX + column * columnWidth;
+        textNode.y = startY + i * rowHeight;
+
         if (container !== figma.currentPage) {
           try {
             container.appendChild(textNode);
@@ -1086,15 +1034,20 @@ JSON array:`;
             errorCount++;
           }
         }
+
+        createdNodes.push(textNode); // Track the created node
         createdCount++;
       } catch (error) {
-        const errorMsg = `Failed to create ${typeName} node: "${content.substring(0, 20)}..."`;
+        const errorMsg = `Failed to create ${typeName} node: "${content.substring(
+          0,
+          20
+        )}..."`;
         errors.push(errorMsg);
         errorCount++;
       }
     }
   };
- 
+
   if (dataTypes.names.length > 0) {
     await createNodesForType(dataTypes.names, "name", currentColumn++);
   }
@@ -1107,21 +1060,21 @@ JSON array:`;
   if (dataTypes.other.length > 0) {
     await createNodesForType(dataTypes.other, "other", currentColumn++);
   }
- 
+
   const totalCount = processedCount + createdCount;
- 
+
   if (errorCount === 0 && totalCount > 0) {
     figma.notify(`✅ Generated ${totalCount} content items`, { timeout: 2000 });
   } else if (totalCount > 0 && errorCount > 0) {
-    figma.notify(`⚠️ Generated ${totalCount} items, ${errorCount} errors. Some items could not be placed due to lack of space.`, {
+    figma.notify(`⚠️ Generated ${totalCount} items, ${errorCount} errors`, {
       timeout: 3000,
     });
   } else if (totalCount === 0 && errorCount > 0) {
-    figma.notify(`❌ Failed to generate content: No available space in the frame/container.`, { timeout: 4000 });
+    figma.notify(`❌ Failed to generate content`, { timeout: 4000 });
   } else {
     figma.notify(`ℹ️ No content generated`, { timeout: 2000 });
   }
- 
+
   // Preserve the original frame selection so user can continue working with the frame
   if (container !== figma.currentPage && "id" in container) {
     try {
@@ -1135,18 +1088,21 @@ JSON array:`;
       console.warn("[ContentFiller] Could not restore frame selection:", error);
     }
   }
- 
+
   // Extract updated node details for next agent
-  const allProcessedNodes = [...existingTextNodes];
- 
+  const allProcessedNodes = [...existingTextNodes, ...createdNodes]; // Include both existing and newly created nodes
+
   // Also include the container frame if it's not the page
   if (container !== figma.currentPage && "id" in container) {
     allProcessedNodes.push(container as BaseNode);
   }
- 
+
   const updatedNodeSnapshots = await extractNodeSnapshot(allProcessedNodes);
- 
-  return {
+
+  // Create snapshots for created nodes
+  const createdNodeSnapshots = await extractNodeSnapshot(createdNodes);
+
+  const result: AgentResponse = {
     success: totalCount > 0,
     message:
       errorCount > 0
@@ -1154,18 +1110,25 @@ JSON array:`;
             ", "
           )}`
         : `Generated ${totalCount} content items (${processedCount} updated, ${createdCount} created)`,
-    error: errors.length > 0 ? errors.join("; ") : undefined,
     updatedNodes: updatedNodeSnapshots,
+    createdNodes: createdNodeSnapshots,
   };
+
+  // Only include error field if there are actual errors
+  if (errors.length > 0) {
+    result.error = errors.join("; ");
+  }
+
+  return result;
 }
- 
+
 function generateSmartNodeName(
   content: string,
   userPrompt: string,
   index: number
 ): string {
   const prompt = userPrompt.toLowerCase();
- 
+
   if (prompt.includes("email")) {
     return `Email ${index + 1}`;
   } else if (prompt.includes("name")) {

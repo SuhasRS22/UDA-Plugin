@@ -8,8 +8,12 @@ export async function runResizeAgent(
   contextParams: any
 ): Promise<AgentResponse> {
   // Extract width and height from parameters
-  const width = parameters.width || parameters.newWidth || 100;
-  const height = parameters.height || parameters.newHeight || 100;
+  const width = parameters.width || parameters.newWidth || 200;
+  const height = parameters.height || parameters.newHeight || 200;
+
+  console.log(
+    `[ResizeAgent] Creating new frame with dimensions: ${width}x${height}`
+  );
 
   // Detect preset dimensions for better messaging
   const getPresetName = (w: number, h: number): string => {
@@ -40,6 +44,7 @@ export async function runResizeAgent(
   const figmaContext = contextParams.figmaContext || null;
 
   let targetNodes: SceneNode[] = [];
+  let contentToInclude: SceneNode[] = []; // Track content that should be included in new frame
 
   // Always prioritize current selection first
   const currentSelection = figma.currentPage.selection;
@@ -60,6 +65,31 @@ export async function runResizeAgent(
     targetNodes = [];
   }
 
+  // Also collect content from previous agents (like content filler)
+  if (figmaContext && figmaContext.textNodes) {
+    console.log(
+      `[ResizeAgent] Found ${figmaContext.textNodes.length} text nodes from previous agents`
+    );
+
+    // Get actual nodes from the IDs
+    for (const textNodeData of figmaContext.textNodes) {
+      try {
+        const actualNode = await figma.getNodeByIdAsync(textNodeData.id);
+        if (actualNode && actualNode.type === "TEXT") {
+          contentToInclude.push(actualNode as TextNode);
+          console.log(
+            `[ResizeAgent] Will include text node: ${actualNode.name}`
+          );
+        }
+      } catch (error) {
+        console.warn(
+          `[ResizeAgent] Could not find text node ${textNodeData.id}:`,
+          error
+        );
+      }
+    }
+  }
+
   if (targetNodes.length === 0) {
     return {
       success: false,
@@ -71,151 +101,236 @@ export async function runResizeAgent(
     };
   }
 
-  // Check if we have an existing frame to resize vs creating a new one
-  const existingFrames = targetNodes.filter(
-    (node) => node.type === "FRAME"
-  ) as FrameNode[];
+  // Always create a new frame - this ensures compatibility with agent chaining
+  // and provides fresh frames for subsequent agents to work with
+  console.log(
+    `[ResizeAgent] Creating new ${presetName} frame (${width}x${height})`
+  );
 
-  if (existingFrames.length > 0) {
-    // Scenario: Resize existing frame(s) and preserve content
-    const updatedNodeSnapshots: NodeSnapshot[] = [];
+  const newFrame = figma.createFrame();
+  newFrame.name = `${
+    presetName.charAt(0).toUpperCase() + presetName.slice(1)
+  } Frame ${width}x${height}`;
+  newFrame.resize(width, height);
 
-    for (const frame of existingFrames) {
+  // Position the new frame intelligently based on current selection or context
+  const figmaSelection = figma.currentPage.selection;
+  let sourceFrame: FrameNode | null = null;
+  let originalWidth = width;
+  let originalHeight = height;
+
+  if (figmaSelection.length > 0) {
+    const firstNode = figmaSelection[0];
+
+    // If we have a frame selected, use it as source for content
+    if (firstNode.type === "FRAME") {
+      sourceFrame = firstNode as FrameNode;
+      originalWidth = sourceFrame.width;
+      originalHeight = sourceFrame.height;
+
+      // Position new frame next to the source frame
+      newFrame.x = sourceFrame.x + sourceFrame.width + 50;
+      newFrame.y = sourceFrame.y;
+
       console.log(
-        `[ResizeAgent] Resizing existing frame: ${frame.name} to ${width}x${height}`
+        `[ResizeAgent] Using source frame: ${sourceFrame.name} (${originalWidth}x${originalHeight})`
       );
+    } else {
+      // Place new frame to the right of current selection with spacing
+      newFrame.x = firstNode.x + firstNode.width + 50;
+      newFrame.y = firstNode.y;
+    }
+  } else {
+    // Default position if no selection
+    newFrame.x = 100;
+    newFrame.y = 100;
+  }
 
-      // Store original dimensions for scaling calculations
-      const originalWidth = frame.width;
-      const originalHeight = frame.height;
-      const scaleX = width / originalWidth;
-      const scaleY = height / originalHeight;
+  // Set a clean background color
+  newFrame.fills = [
+    {
+      type: "SOLID",
+      color: { r: 0.98, g: 0.98, b: 0.98 }, // Light gray background
+    },
+  ];
 
-      // Resize the frame
-      frame.resize(width, height);
+  // Add frame to the page
+  figma.currentPage.appendChild(newFrame);
 
-      // Scale and reposition child nodes proportionally
-      for (const child of frame.children) {
-        if ("x" in child && "y" in child) {
-          child.x = child.x * scaleX;
-          child.y = child.y * scaleY;
+  // Copy and scale content from source frame if available
+  const copiedNodes: SceneNode[] = [];
+  if (sourceFrame && sourceFrame.children.length > 0) {
+    console.log(
+      `[ResizeAgent] Copying and scaling ${sourceFrame.children.length} nodes from source frame`
+    );
 
-          // Scale dimensions if the child supports it
-          if ("resize" in child && "width" in child && "height" in child) {
-            try {
-              const newChildWidth = child.width * scaleX;
-              const newChildHeight = child.height * scaleY;
-              child.resize(newChildWidth, newChildHeight);
-            } catch (error) {
-              console.warn(
-                `[ResizeAgent] Could not resize child ${child.name}:`,
-                error
-              );
-            }
+    // Calculate scale factors
+    const scaleX = width / originalWidth;
+    const scaleY = height / originalHeight;
+
+    console.log(
+      `[ResizeAgent] Scale factors: X=${scaleX.toFixed(3)}, Y=${scaleY.toFixed(
+        3
+      )}`
+    );
+
+    // Clone and scale each child
+    for (const child of sourceFrame.children) {
+      try {
+        const clonedNode = child.clone();
+
+        // Scale position
+        if ("x" in clonedNode && "y" in clonedNode) {
+          clonedNode.x = clonedNode.x * scaleX;
+          clonedNode.y = clonedNode.y * scaleY;
+        }
+
+        // Scale dimensions
+        if (
+          "resize" in clonedNode &&
+          "width" in clonedNode &&
+          "height" in clonedNode
+        ) {
+          try {
+            const newChildWidth = clonedNode.width * scaleX;
+            const newChildHeight = clonedNode.height * scaleY;
+            clonedNode.resize(newChildWidth, newChildHeight);
+          } catch (error) {
+            console.warn(
+              `[ResizeAgent] Could not resize child ${clonedNode.name}:`,
+              error
+            );
           }
+        }
 
-          // Handle text scaling
-          if (child.type === "TEXT") {
-            const textNode = child as TextNode;
+        // Scale text if applicable
+        if (clonedNode.type === "TEXT") {
+          const textNode = clonedNode as TextNode;
+          try {
+            if (typeof textNode.fontSize === "number") {
+              const newFontSize = Math.max(
+                8,
+                textNode.fontSize * Math.min(scaleX, scaleY)
+              );
+              textNode.fontSize = newFontSize;
+            }
+          } catch (error) {
+            console.warn(
+              `[ResizeAgent] Could not scale text ${textNode.name}:`,
+              error
+            );
+          }
+        }
+
+        // Add to new frame
+        newFrame.appendChild(clonedNode);
+        copiedNodes.push(clonedNode);
+
+        console.log(`[ResizeAgent] Copied and scaled: ${clonedNode.name}`);
+      } catch (error) {
+        console.error(
+          `[ResizeAgent] Error copying child ${child.name}:`,
+          error
+        );
+      }
+    }
+  }
+
+  // Also copy content from previous agents (like content filler) if no source frame was found
+  if (!sourceFrame && contentToInclude.length > 0) {
+    console.log(
+      `[ResizeAgent] Moving ${contentToInclude.length} nodes from previous agents to new frame`
+    );
+
+    let currentY = 20; // Start position inside the frame
+    const spacing = 10; // Space between nodes
+
+    for (const contentNode of contentToInclude) {
+      try {
+        // MOVE the node instead of cloning to avoid duplication
+        // Remove from current parent first
+        if (contentNode.parent && contentNode.parent !== figma.currentPage) {
+          contentNode.remove();
+        }
+
+        // Position nodes vertically with spacing
+        if ("x" in contentNode && "y" in contentNode) {
+          contentNode.x = 20; // Standard margin from left
+          contentNode.y = currentY;
+
+          // Update Y position for next node
+          if ("height" in contentNode) {
+            currentY += contentNode.height + spacing;
+          } else {
+            currentY += 30; // Default spacing for nodes without height
+          }
+        }
+
+        // Ensure text fits within the frame width
+        if (contentNode.type === "TEXT" && "width" in contentNode) {
+          const maxWidth = width - 40; // Frame width minus margins
+          if (contentNode.width > maxWidth) {
             try {
-              if (typeof textNode.fontSize === "number") {
-                const newFontSize = Math.max(
-                  8,
-                  textNode.fontSize * Math.min(scaleX, scaleY)
-                );
-                textNode.fontSize = newFontSize;
-              }
+              contentNode.resize(maxWidth, contentNode.height);
             } catch (error) {
               console.warn(
-                `[ResizeAgent] Could not scale text ${textNode.name}:`,
+                `[ResizeAgent] Could not resize text node to fit frame:`,
                 error
               );
             }
           }
         }
+
+        // Add to new frame (this moves it from page to frame)
+        newFrame.appendChild(contentNode);
+        copiedNodes.push(contentNode);
+
+        console.log(
+          `[ResizeAgent] Moved content from previous agent: ${contentNode.name}`
+        );
+      } catch (error) {
+        console.error(
+          `[ResizeAgent] Error moving content node ${contentNode.name}:`,
+          error
+        );
       }
-
-      // Create node snapshot for orchestrator
-      const snapshot: NodeSnapshot = {
-        id: frame.id,
-        name: frame.name,
-        type: frame.type,
-        x: frame.x,
-        y: frame.y,
-        width: frame.width,
-        height: frame.height,
-        parentId: frame.parent?.id,
-      };
-
-      updatedNodeSnapshots.push(snapshot);
     }
-
-    console.log(
-      `[ResizeAgent] Resized ${existingFrames.length} existing frame(s) to ${presetName} ${width}x${height}`
-    );
-
-    return {
-      success: true,
-      message: `Resized ${existingFrames.length} existing frame(s) to ${presetName} view (${width}x${height}) and scaled content proportionally`,
-      updatedNodes: updatedNodeSnapshots,
-      createdNodes: [],
-      deletedNodeIds: [],
-    };
-  } else {
-    // Scenario: Create new frame (no existing frames selected)
-    const newFrame = figma.createFrame();
-    newFrame.name = `New Frame ${width}x${height}`;
-    newFrame.resize(width, height);
-
-    // Position the new frame next to existing selection or at a default location
-    if (targetNodes.length > 0) {
-      const firstNode = targetNodes[0];
-      newFrame.x = firstNode.x + firstNode.width + 50; // Place to the right with some spacing
-      newFrame.y = firstNode.y;
-    } else {
-      newFrame.x = 100;
-      newFrame.y = 100;
-    }
-
-    // Set a background color for the frame
-    newFrame.fills = [
-      {
-        type: "SOLID",
-        color: { r: 0.95, g: 0.95, b: 0.95 }, // Light gray background
-      },
-    ];
-
-    figma.currentPage.appendChild(newFrame);
-
-    // Select the new frame so content agent can work with it
-    figma.currentPage.selection = [newFrame];
-
-    // Create node snapshot for orchestrator
-    const snapshot: NodeSnapshot = {
-      id: newFrame.id,
-      name: newFrame.name,
-      type: newFrame.type,
-      x: newFrame.x,
-      y: newFrame.y,
-      width: newFrame.width,
-      height: newFrame.height,
-      parentId: newFrame.parent?.id,
-    };
-
-    const createdNodeSnapshots: NodeSnapshot[] = [snapshot];
-
-    console.log(
-      `[ResizeAgent] Created new frame: ${newFrame.name} (${presetName} ${width}x${height})`
-    );
-
-    return {
-      success: true,
-      message: `Created new ${presetName} frame with dimensions ${width}x${height}`,
-      updatedNodes: [],
-      createdNodes: createdNodeSnapshots,
-      deletedNodeIds: [],
-    };
   }
+
+  // Select the new frame so subsequent agents (like content filler) can work with it
+  figma.currentPage.selection = [newFrame];
+
+  // Create node snapshot for the orchestrator
+  const snapshot: NodeSnapshot = {
+    id: newFrame.id,
+    name: newFrame.name,
+    type: newFrame.type,
+    x: newFrame.x,
+    y: newFrame.y,
+    width: newFrame.width,
+    height: newFrame.height,
+    parentId: newFrame.parent?.id,
+  };
+
+  const createdNodeSnapshots: NodeSnapshot[] = [snapshot];
+
+  console.log(
+    `[ResizeAgent] Successfully created new frame: ${newFrame.name} at (${newFrame.x}, ${newFrame.y})`
+  );
+
+  // Create appropriate success message
+  let successMessage = `Created new ${presetName} frame with dimensions ${width}x${height}`;
+  if (copiedNodes.length > 0) {
+    successMessage += ` and copied ${copiedNodes.length} scaled node(s) from source frame`;
+  }
+
+  return {
+    success: true,
+    message: successMessage,
+    updatedNodes: [],
+    createdNodes: createdNodeSnapshots,
+    deletedNodeIds: [],
+  };
 }
 
 export async function smartResizeWithTextFitting(
