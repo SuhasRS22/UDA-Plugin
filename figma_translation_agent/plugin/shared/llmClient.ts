@@ -9,6 +9,8 @@ export async function llmClient(userPrompt: string): Promise<any[]> {
   console.log("[LLM] Prompt to Groq:", userPrompt);
 
   const systemPrompt = `You are a task planner for a Figma plugin. Analyze user requests and return a JSON array of tasks.
+  Dont always rely on the rules mentioned below, just understand the nodes that are being passed and check the prompt and try to understand the context..
+  you are actually intelligent , just understand what they want to do, users are dumb. there is no guarentee that they will use proper english.
 
 AVAILABLE AGENTS:
 - resize: Changes dimensions of frames/elements
@@ -170,8 +172,8 @@ Examples:
         const fallbackResult = tryFallbackParsing(content);
         if (fallbackResult.length > 0) {
           console.log("[LLM] Fallback parse successful:", fallbackResult);
-            return fallbackResult;
-          }
+          return fallbackResult;
+        }
 
         throw parseError;
       }
