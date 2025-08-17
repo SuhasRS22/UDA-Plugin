@@ -1,6 +1,11 @@
-const GROQ_API_KEY =
-  process.env.GROQ_API_KEY ||
-  "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";
+const GROQ_API_KEY = "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";
+
+// Check if API key is available
+if (!GROQ_API_KEY) {
+  console.error(
+    "[LLM] No GROQ_API_KEY found in environment variables. Please check your .env file."
+  );
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

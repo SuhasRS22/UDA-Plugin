@@ -32,6 +32,11 @@ export interface AgentResponse {
   message: string;
   error?: string;
 
+  /** Optional agent identification for UI display purposes */
+  agentType?: string;
+  agentName?: string;
+  response?: string; // Additional response content for display
+
   /** Modified nodes (can be many, e.g., multiple text children in a frame). */
   updatedNodes?: NodeSnapshot[];
 
