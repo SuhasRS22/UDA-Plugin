@@ -21,7 +21,7 @@ figma_translation_agent/
     ui.html                    # Advanced UI with dynamic resizing
     manifest.json              # Plugin configuration
     agents/
-      chatAgent.ts             # LLM-powered backup agent
+      infoAgent.ts             # LLM-powered knowledge agent
       contentFillerAgent.ts    # Smart content generation
       contrastAgent.ts         # LLM-enhanced accessibility checker
       resizeAgent.ts           # Intelligent frame resizing
@@ -39,7 +39,7 @@ figma_translation_agent/
 
 ### **🤖 Multi-Agent System**
 
-- **Chat Agent**: Intelligent backup for general queries and guidance
+- **Info Agent**: Intelligent for general queries and guidance
 - **Content Filler**: Smart text generation with input field detection
 - **Contrast Checker**: LLM-enhanced WCAG accessibility analysis
 - **Resize Agent**: Frame creation with content preservation and scaling
@@ -130,7 +130,7 @@ figma_translation_agent/
 
 4. **Development workflow**:
    - Edit TypeScript files in `plugin/` directory
-   - Run `node build.js` after changes
+   - Run `node build.js || npm run build` after changes in the `../plugin/` directory 
    - Refresh plugin in Figma to see updates
 
 ### 📱 Loading Plugin in Figma:
@@ -138,7 +138,7 @@ figma_translation_agent/
 1. **Open Figma Desktop**
 2. **Navigate to**: `Plugins → Development → Import plugin from manifest`
 3. **Select**: The `manifest.json` file from the plugin directory
-4. **Launch**: Find "Translation Agent" in your plugins menu
+4. **Launch**: Find "UDA Plugin" in your plugins menu
 
 ## 🛠️ Development Guide
 
@@ -195,7 +195,7 @@ The build process (`build.js`):
 
 ## 🎯 Usage Examples
 
-### **Chat Agent (Backup)**
+### **Info Agent**
 
 - Select any frame or element
 - Ask general questions: _"How can I improve this design?"_
