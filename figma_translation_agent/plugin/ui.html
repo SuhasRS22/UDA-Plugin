@@ -567,7 +567,7 @@
           <h3>
             Available Agents
             <span style="font-size: 14px; color: #94a3b8; font-weight: normal"
-              >(5 Active • 1 Coming Soon)</span
+              >(5 Active )</span
             >
           </h3>
           <span class="modal-close" id="modal-close">&times;</span>
@@ -595,7 +595,7 @@
           </div>
           <div class="agent-item active">
             <h4>
-              💬 Chat Agent <span class="status-badge active">Active</span>
+              💬 Info Agent <span class="status-badge active">Active</span>
             </h4>
             <p>
               Your intelligent design assistant! Answers questions about your
@@ -603,14 +603,16 @@
               you need guidance.
             </p>
           </div>
-          <div class="agent-item inactive">
+          <div class="agent-item active">
             <h4>
               🌍 Translation Agent
-              <span class="status-badge inactive">Coming Soon</span>
+              <span class="status-badge active">Active</span>
             </h4>
             <p>
               Translates text content in your designs to different languages
-              while maintaining design integrity and layout consistency.
+              with LLM fallback support. Supports Danish, Swedish, Norwegian,
+              and many more languages while maintaining design integrity and
+              layout consistency.
             </p>
           </div>
           <div class="agent-item active">
@@ -621,16 +623,6 @@
             <p>
               Analyzes color contrast ratios in your designs to ensure
               accessibility compliance and WCAG standards.
-            </p>
-          </div>
-          <div class="agent-item active">
-            <h4>
-              🤖 AI Orchestrator <span class="status-badge active">Active</span>
-            </h4>
-            <p>
-              Coordinates all agents intelligently based on your requests.
-              Automatically determines which agents to use and in what order to
-              complete your design tasks.
             </p>
           </div>
         </div>
@@ -854,6 +846,8 @@
         "Content Filler Agent",
         "Contrast Agent",
         "Resize Agent",
+        "Chat Agent",
+        "Agent Studio",
       ];
       let titleIndex = 0;
 

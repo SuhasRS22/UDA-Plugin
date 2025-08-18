@@ -3,7 +3,9 @@ import { llmClient } from "../shared/llmClient";
 import { runLoremIpsumAgent } from "../agents/contentFillerAgent";
 import { runResizeAgent } from "../agents/resizeAgent";
 import { runChatAgent, shouldUseChatAgent } from "../agents/chatAgent";
+
 import {runTranslationAgent} from "../agents/translationAgent";
+
 import { runContrastCheckerAgent } from "../agents/contrastAgent";
 import { AgentResponse } from "../utils/types";
 import { buildFigmaContext } from "../shared/buildFigmaContext";
@@ -19,7 +21,8 @@ const agentRegistry: Record<
   lorem: async (params, context) => runLoremIpsumAgent(params, context),
   contentFiller: async (params, context) => runLoremIpsumAgent(params, context),
   chat: async (params, context) => runChatAgent(params, context),
-  contrastChecker: async (params, context) => runContrastCheckerAgent(params, context),
+  contrastChecker: async (params, context) =>
+    runContrastCheckerAgent(params, context),
 };
 
 // --- Helper: Converts figma node data into a readable LLM-friendly summary
