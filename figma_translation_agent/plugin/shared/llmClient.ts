@@ -32,11 +32,12 @@ RESIZE AGENT - Use when user mentions:
 
 LOREM/CONTENTFILLER AGENT - Use when user wants to:
 - Add text content: "add text", "fill with content", "add placeholder text"
-- Add names: "add name", "add title", "add heading"
+- Add names: "add name", "add title", "add heading", "add indian names", "add fake names"
 - Fill empty fields: "fill form", "add dummy data", "populate content"
 - Add sample content: "lorem ipsum", "fake content", "test data"
 - Replace/edit text: "change X to Y", "replace text", "update content"
 - Text modifications: "change are you to am i", "replace hello with hi"
+- Specific name types: "indian names", "american names", "company names"
 - anything with adding or updating the text to the existing things 
 
 TRANSLATE AGENT - Use when user mentions:
@@ -61,6 +62,7 @@ TRANSLATE:
 LOREM/CONTENTFILLER:
 - type: "realistic" (names, titles), "lorem" (lorem ipsum), "form" (form fields), "replace" (text replacement)
 - content: specific text to add or replacement instructions
+- nameType: "indian", "american", "generic" (for name-specific requests)
 - frameAction: "update"
 
 CONTRASTCHECKER:
@@ -72,6 +74,11 @@ RULES:
 1. Return ONLY valid JSON array
 2. No explanations or examples
 3. Parse the user's exact request
+4. For complex requests, use multiple agents
+
+EXAMPLES:
+- "change to mobile and add indian names" → [{"agent":"resize","params":{"width":375,"height":812,"frameAction":"new"}},{"agent":"contentFiller","params":{"type":"realistic","nameType":"indian","frameAction":"update"}}]
+- "make it bigger and fill with content" → [{"agent":"resize","params":{"width":1200,"height":800,"frameAction":"update"}},{"agent":"contentFiller","params":{"type":"realistic","frameAction":"update"}}]
 
 IMPORTANT: Return ONLY a valid JSON array. No explanations, no markdown, no extra text.
 

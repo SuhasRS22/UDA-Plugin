@@ -3,11 +3,10 @@ import { llmClient } from "../shared/llmClient";
 import { runLoremIpsumAgent } from "../agents/contentFillerAgent";
 import { runResizeAgent } from "../agents/resizeAgent";
 import { runChatAgent, shouldUseChatAgent } from "../agents/chatAgent";
-// import translateAgent from "../agents/translationAgent";
+import { runTranslationAgent } from "../agents/translationAgent";
 import { runContrastCheckerAgent } from "../agents/contrastAgent";
 import { AgentResponse } from "../utils/types";
 import { buildFigmaContext } from "../shared/buildFigmaContext";
-import { runContrastCheckerAgent } from "../agents/contrastAgent";
 
 // Registry of all agents — orchestrator never hardcodes logic
 const agentRegistry: Record<
@@ -15,12 +14,13 @@ const agentRegistry: Record<
   (params: any, context: any) => Promise<AgentResponse>
 > = {
   resize: async (params, context) => runResizeAgent(params, context),
-  // translate: async (params, context) =>
-  //   translateAgent(params, context),
+  translate: async (params, context) => runTranslationAgent(params, context),
+  // translation: async (params, context) => runTranslationAgent(params, context),
   lorem: async (params, context) => runLoremIpsumAgent(params, context),
   contentFiller: async (params, context) => runLoremIpsumAgent(params, context),
   chat: async (params, context) => runChatAgent(params, context),
-  contrastChecker: async (params, context) => runContrastCheckerAgent(params, context),
+  contrastChecker: async (params, context) =>
+    runContrastCheckerAgent(params, context),
 };
 
 // --- Helper: Converts figma node data into a readable LLM-friendly summary
