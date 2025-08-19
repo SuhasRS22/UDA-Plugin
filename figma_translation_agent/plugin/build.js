@@ -14,8 +14,16 @@ function loadEnv() {
         const [key, ...valueParts] = trimmedLine.split('=');
         if (key && valueParts.length > 0) {
           // Join back in case value contains '=' and remove any trailing semicolons
-          const value = valueParts.join('=').replace(/;$/, '').trim();
+          let value = valueParts.join('=').replace(/;$/, '').trim();
+          
+          // Remove surrounding quotes if present
+          if ((value.startsWith('"') && value.endsWith('"')) || 
+              (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.slice(1, -1);
+          }
+          
           env[key.trim()] = value;
+          console.log(`Loaded ${key.trim()}: ${value ? value.substring(0, 10) + '...' : 'empty'}`);
         }
       }
     });
