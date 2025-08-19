@@ -107,12 +107,30 @@ export async function runTranslationAgent(
 
     // Get target languages from parameters or detect from user prompt
     let languages = params.languages;
-    const useSlang = params.useSlang !== undefined ? params.useSlang : true;
+    // If 'language' is provided as a string, convert to array and map to code if needed
+    if (!languages && typeof params.language === 'string') {
+      // Try to map language name to code
+      const langName = params.language.toLowerCase();
+      const languageMap: { [key: string]: string } = {
+        danish: 'da',
+        swedish: 'sv',
+        norwegian: 'no',
+        finnish: 'fi',
+        german: 'de',
+        french: 'fr',
+        spanish: 'es',
+        italian: 'it',
+        portuguese: 'pt',
+        dutch: 'nl',
+      };
+      const code = languageMap[langName] || langName;
+      languages = [code];
+    }
+    // Fallback: detect from user prompt or default to Danish
     if (!languages || !Array.isArray(languages) || languages.length === 0) {
-      // Try to detect from user prompt
       const userPrompt = contextParams?.userPrompt || "";
       const detectedLang = detectLanguageFromPrompt(userPrompt);
-      languages = detectedLang ? [detectedLang] : ["da"]; // fallback to Danish
+      languages = detectedLang ? [detectedLang] : ["da"];
     }
     
     // Get text nodes from context (compatible with orchestrator structure)
