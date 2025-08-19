@@ -1,76 +1,98 @@
+// Detect language code from user prompt
+function detectLanguageFromPrompt(prompt: string): string | null {
+  const languageMap: { [key: string]: string } = {
+    da: "danish",
+    sv: "swedish",
+    no: "norwegian",
+    fi: "finnish",
+    de: "german",
+    fr: "french",
+    es: "spanish",
+    it: "italian",
+    pt: "portuguese",
+    nl: "dutch",
+  };
+  const lowerPrompt = prompt.toLowerCase();
+  for (const [code, name] of Object.entries(languageMap)) {
+    if (lowerPrompt.includes(name)) {
+      return code;
+    }
+  }
+  return null;
+}
 // translationAgent.ts
 import { AgentResponse, NodeSnapshot } from "../utils/types";
-import { llmClient } from "../shared/llmClient";
+// import { llmClient } from "../shared/llmClient";
  
 // Simple fallback translation using LLM
-async function translateWithLLM(
-  text: string,
-  targetLang: string
-): Promise<string> {
-  try {
-    // Clean the text first - remove any existing [DA] prefixes
-    const cleanText = text.replace(/^\[DA\]\s*/g, "").trim();
+// async function translateWithLLM(
+//   text: string,
+//   targetLang: string
+// ): Promise<string> {
+//   try {
+//     // Clean the text first - remove any existing [DA] prefixes
+//     const cleanText = text.replace(/^\[DA\]\s*/g, "").trim();
  
-    const languageMap: { [key: string]: string } = {
-      da: "Danish",
-      sv: "Swedish",
-      no: "Norwegian",
-      fi: "Finnish",
-      de: "German",
-      fr: "French",
-      es: "Spanish",
-      it: "Italian",
-      pt: "Portuguese",
-      nl: "Dutch",
-    };
+//     const languageMap: { [key: string]: string } = {
+//       da: "Danish",
+//       sv: "Swedish",
+//       no: "Norwegian",
+//       fi: "Finnish",
+//       de: "German",
+//       fr: "French",
+//       es: "Spanish",
+//       it: "Italian",
+//       pt: "Portuguese",
+//       nl: "Dutch",
+//     };
  
-    const fullLanguageName =
-      languageMap[targetLang.toLowerCase()] || targetLang;
+//     const fullLanguageName =
+//       languageMap[targetLang.toLowerCase()] || targetLang;
  
-    const prompt = `Translate this text to ${fullLanguageName}. Return ONLY the translated text with no extra formatting or explanations:
+//     const prompt = `Translate this text to ${fullLanguageName}. Return ONLY the translated text with no extra formatting or explanations:
  
-"${cleanText}"
+// "${cleanText}"
  
-Translated text:`;
+// Translated text:`;
  
-    console.log("[Translation Agent] LLM Prompt:", prompt);
-    const response = await llmClient(prompt);
-    console.log("[Translation Agent] LLM Response:", response);
+//     console.log("[Translation Agent] LLM Prompt:", prompt);
+//     const response = await llmClient(prompt);
+//     console.log("[Translation Agent] LLM Response:", response);
  
-    if (response && response.length > 0) {
-      const firstResponse = response[0];
-      let translatedText = "";
+//     if (response && response.length > 0) {
+//       const firstResponse = response[0];
+//       let translatedText = "";
  
-      if (typeof firstResponse === "string") {
-        translatedText = firstResponse;
-      } else if (firstResponse && firstResponse.content) {
-        translatedText = firstResponse.content;
-      } else if (firstResponse && firstResponse.text) {
-        translatedText = firstResponse.text;
-      }
+//       if (typeof firstResponse === "string") {
+//         translatedText = firstResponse;
+//       } else if (firstResponse && firstResponse.content) {
+//         translatedText = firstResponse.content;
+//       } else if (firstResponse && firstResponse.text) {
+//         translatedText = firstResponse.text;
+//       }
  
-      // Clean up the response - remove any quotes, prefixes, or explanations
-      translatedText = translatedText
-        .replace(/^["']|["']$/g, "") // Remove quotes
-        .replace(/^Translated text:\s*/i, "") // Remove "Translated text:" prefix
-        .replace(/^\[.*?\]\s*/, "") // Remove any bracketed prefixes
-        .trim();
+//       // Clean up the response - remove any quotes, prefixes, or explanations
+//       translatedText = translatedText
+//         .replace(/^["']|["']$/g, "") // Remove quotes
+//         .replace(/^Translated text:\s*/i, "") // Remove "Translated text:" prefix
+//         .replace(/^\[.*?\]\s*/, "") // Remove any bracketed prefixes
+//         .trim();
  
-      if (translatedText && translatedText !== cleanText) {
-        console.log(
-          `[Translation Agent] LLM translation successful: "${translatedText}"`
-        );
-        return translatedText;
-      }
-    }
+//       if (translatedText && translatedText !== cleanText) {
+//         console.log(
+//           `[Translation Agent] LLM translation successful: "${translatedText}"`
+//         );
+//         return translatedText;
+//       }
+//     }
  
-    console.warn("[Translation Agent] LLM returned no valid translation");
-    return ""; // Return empty to indicate failure
-  } catch (error) {
-    console.warn("[Translation Agent] LLM fallback failed:", error);
-    return ""; // Return empty to indicate failure
-  }
-}
+//     console.warn("[Translation Agent] LLM returned no valid translation");
+//     return ""; // Return empty to indicate failure
+//   } catch (error) {
+//     console.warn("[Translation Agent] LLM fallback failed:", error);
+//     return ""; // Return empty to indicate failure
+//   }
+// }
  
 export async function runTranslationAgent(
   parameters: any,
@@ -83,13 +105,19 @@ export async function runTranslationAgent(
  
     console.log(params);
 
-    // Get target languages from parameters
-    const languages = params.languages || ["da"]; // Default to Danish
+    // Get target languages from parameters or detect from user prompt
+    let languages = params.languages;
     const useSlang = params.useSlang !== undefined ? params.useSlang : true;
+    if (!languages || !Array.isArray(languages) || languages.length === 0) {
+      // Try to detect from user prompt
+      const userPrompt = contextParams?.userPrompt || "";
+      const detectedLang = detectLanguageFromPrompt(userPrompt);
+      languages = detectedLang ? [detectedLang] : ["da"]; // fallback to Danish
+    }
     
     // Get text nodes from context (compatible with orchestrator structure)
     const textNodes = figmaContext?.textNodes || [];
-    if (false) {
+    if (textNodes.length === 0) {
       return {
         success: false,
         message:
