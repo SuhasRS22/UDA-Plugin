@@ -111,6 +111,7 @@ export async function runTranslationAgent(
     if (!languages && typeof params.language === 'string') {
       // Try to map language name to code
       const langName = params.language.toLowerCase();
+      
       const languageMap: { [key: string]: string } = {
         danish: 'da',
         swedish: 'sv',
