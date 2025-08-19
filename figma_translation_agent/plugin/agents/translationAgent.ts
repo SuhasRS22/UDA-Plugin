@@ -20,6 +20,7 @@ function detectLanguageFromPrompt(prompt: string): string | null {
   }
   return null;
 }
+import { log } from "console";
 // translationAgent.ts
 import { AgentResponse, NodeSnapshot } from "../utils/types";
 // import { llmClient } from "../shared/llmClient";
@@ -104,14 +105,14 @@ export async function runTranslationAgent(
     const figmaContext = contextParams.figmaContext || null;
  
     console.log(params);
-
+ 
     // Get target languages from parameters or detect from user prompt
-    let languages = params.languages;
+    let languages = params.language;
+    console.log(languages, "sadfds");
     // If 'language' is provided as a string, convert to array and map to code if needed
     if (!languages && typeof params.language === 'string') {
       // Try to map language name to code
       const langName = params.language.toLowerCase();
-      
       const languageMap: { [key: string]: string } = {
         danish: 'da',
         swedish: 'sv',
@@ -128,12 +129,13 @@ export async function runTranslationAgent(
       languages = [code];
     }
     // Fallback: detect from user prompt or default to Danish
-    if (!languages || !Array.isArray(languages) || languages.length === 0) {
+    if (1) {
       const userPrompt = contextParams?.userPrompt || "";
       const detectedLang = detectLanguageFromPrompt(userPrompt);
+      console.log(detectedLang, "gsdgsdagksdkkjsdfkksdfkhhf");
       languages = detectedLang ? [detectedLang] : ["da"];
     }
-    
+   
     // Get text nodes from context (compatible with orchestrator structure)
     const textNodes = figmaContext?.textNodes || [];
     if (textNodes.length === 0) {
@@ -157,9 +159,9 @@ export async function runTranslationAgent(
     );
  
     // Process each language
+    console.log(languages, "to be")
     for (const lang of languages) {
-      console.log(languages)
-
+ 
       console.log(`[Translation Agent] Translating to ${lang}...`);
  
       for (const textNode of textNodes) {
@@ -189,7 +191,7 @@ export async function runTranslationAgent(
         try {
           const body = {
             text: node.characters,
-            lang_short: lang,
+            target_language: languages[0],
             // use_slang: useSlang,
           };
  
@@ -201,7 +203,7 @@ export async function runTranslationAgent(
           let translatedText = "";
           let usedBackend = false;
  
-          
+         
           try {
             const resp = await fetch(backendUrl, {
               method: "POST",
@@ -218,16 +220,16 @@ export async function runTranslationAgent(
             if (resp.ok) {
             const responseText = await resp.text(); // ✅ Call text() only once
             console.log(`[Translation Agent] Response body: ${responseText}`);
-            
+           
             try {
                 const translatedData = JSON.parse(responseText); // ✅ Parse the JSON
                 console.log('[Translation Agent] Parsed data:', translatedData);
-                
+               
                 // ✅ Extract the translatedText from your JSON response
                 translatedText = translatedData.translatedText || "";
-                
+               
                 console.log(`[Translation Agent] Extracted translation: ${translatedText}`);
-                
+               
                 if (translatedText) {
                 usedBackend = true;
                 console.log(`[Translation Agent] Backend translation successful: "${translatedText.substring(0, 50)}..."`);
@@ -243,7 +245,7 @@ export async function runTranslationAgent(
           } catch (backendError) {
             console.warn(`[Translation Agent] Backend request failed:`, backendError);
           }
-          
+         
           // Skip backend for now since it's returning 404 - use LLM directly
         //   console.log(
         //     `[Translation Agent] Skipping backend (404 error), using LLM directly for: "${node.characters.substring(
@@ -254,7 +256,7 @@ export async function runTranslationAgent(
         //   translatedText = await translateWithLLM(node.characters, lang);
  
           // Old backend code (commented out due to 404 errors):
-          
+         
  
           // Skip if still no translation (don't use mock unless debugging)
           if (!translatedText) {
@@ -364,5 +366,4 @@ export async function runTranslationAgent(
     };
   }
 }
- 
  
